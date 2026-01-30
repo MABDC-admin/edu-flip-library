@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ const bookSchema = z.object({
 });
 
 export default function AdminBooks() {
+  const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [gradeLevel, setGradeLevel] = useState<number>(1);
@@ -30,6 +32,7 @@ export default function AdminBooks() {
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploading, setIsUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -46,6 +49,10 @@ export default function AdminBooks() {
       return data as Book[];
     },
   });
+
+  const filteredBooks = books?.filter(book =>
+    book.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const createBook = useMutation({
     mutationFn: async ({ title, gradeLevel, pdfFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File; coverFile: File | null }) => {
@@ -209,7 +216,16 @@ export default function AdminBooks() {
       <div className="space-y-6">
         {/* Actions bar */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">
-          <div className="flex gap-2">
+          <div className="flex flex-1 gap-2 max-w-md">
+            <div className="relative flex-1">
+              <Input
+                placeholder="Search books..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+              <BookOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gradient-primary" onClick={resetForm}>
@@ -359,7 +375,7 @@ export default function AdminBooks() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {books.map((book) => (
+                  {filteredBooks?.map((book) => (
                     <TableRow key={book.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-3">
@@ -369,22 +385,34 @@ export default function AdminBooks() {
                           {book.title}
                         </div>
                       </TableCell>
-                      <TableCell>{GRADE_LABELS[book.grade_level]}</TableCell>
+                      <TableCell>{GRADE_LABELS[book.grade_level] || 'N/A'}</TableCell>
                       <TableCell>{book.page_count}</TableCell>
                       <TableCell>{getStatusBadge(book.status)}</TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell className="text-muted-foreground text-xs">
                         {new Date(book.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteBook.mutate(book.id)}
-                          disabled={deleteBook.isPending}
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => navigate(`/read/${book.id}`)}
+                            title="View Flipbook"
+                            className="text-primary hover:bg-primary/10"
+                          >
+                            <BookOpen className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteBook.mutate(book.id)}
+                            disabled={deleteBook.isPending}
+                            title="Delete Book"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

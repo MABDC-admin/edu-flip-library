@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BookOpen, Users, TrendingUp, Clock } from 'lucide-react';
@@ -7,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { GRADE_LABELS } from '@/types/database';
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
   // Fetch stats
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
@@ -145,7 +147,10 @@ export default function AdminDashboard() {
 
         {/* Quick actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="hover:shadow-card transition-shadow cursor-pointer group" onClick={() => window.location.href = '/admin/books'}>
+          <Card
+            className="hover:shadow-card transition-shadow cursor-pointer group"
+            onClick={() => navigate('/admin/books')}
+          >
             <CardContent className="flex items-center gap-4 p-6">
               <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform">
                 <BookOpen className="w-6 h-6 text-primary-foreground" />
@@ -159,7 +164,10 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card className="hover:shadow-card transition-shadow cursor-pointer group" onClick={() => window.location.href = '/admin/students'}>
+          <Card
+            className="hover:shadow-card transition-shadow cursor-pointer group"
+            onClick={() => navigate('/admin/students')}
+          >
             <CardContent className="flex items-center gap-4 p-6">
               <div className="w-12 h-12 rounded-xl gradient-success flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Users className="w-6 h-6 text-success-foreground" />
