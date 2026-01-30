@@ -83,12 +83,14 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
           {/* Logo */}
           <div className="p-6 border-b">
             <Link to="/admin" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
-                <BookOpen className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="font-display font-bold text-xl text-gradient">EduFlip</h1>
-                <p className="text-xs text-muted-foreground">Admin Panel</p>
+              <div className="flex items-center gap-2 mb-8 px-2">
+                <div className="bg-white/10 p-2 rounded-lg">
+                  <LayoutDashboard className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-xl font-display font-bold text-white">MABDC</h1>
+                  <p className="text-xs text-slate-400">Admin Portal</p>
+                </div>
               </div>
             </Link>
           </div>

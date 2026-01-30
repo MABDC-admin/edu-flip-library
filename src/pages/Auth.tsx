@@ -29,7 +29,7 @@ export default function Auth() {
   const [gradeLevel, setGradeLevel] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  
+
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -65,11 +65,11 @@ export default function Auth() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setIsSubmitting(true);
-    
+
     try {
       if (isLogin) {
         const { error } = await signIn(email, password);
@@ -130,24 +130,23 @@ export default function Auth() {
         <div className="absolute bottom-20 right-20 w-32 h-32 rounded-full bg-accent/10 animate-float" style={{ animationDelay: '1s' }} />
         <div className="absolute top-1/3 right-10 w-16 h-16 rounded-full bg-secondary/10 animate-float" style={{ animationDelay: '2s' }} />
       </div>
-      
+
       <Card className="w-full max-w-md shadow-playful relative">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-lg">
-            <BookOpen className="w-8 h-8 text-primary-foreground" />
+          <div className="flex flex-col items-center mb-8">
+            <div className="bg-primary/10 p-3 rounded-xl mb-4">
+              <BookOpen className="w-8 h-8 text-primary" />
+            </div>
+            <h1 className="text-2xl font-display font-bold text-slate-900">MABDC Library</h1>
+            <p className="text-slate-500">Sign in to access your digital books</p>
           </div>
-          <div>
-            <CardTitle className="text-2xl font-display text-gradient">
-              {isLogin ? 'Welcome Back!' : 'Join EduFlip'}
-            </CardTitle>
-            <CardDescription className="flex items-center justify-center gap-1 mt-2">
-              <Sparkles className="w-4 h-4 text-accent" />
-              {isLogin ? 'Log in to continue reading' : 'Create your reading adventure'}
-              <Sparkles className="w-4 h-4 text-accent" />
-            </CardDescription>
-          </div>
+          <CardDescription className="flex items-center justify-center gap-1 mt-2">
+            <Sparkles className="w-4 h-4 text-accent" />
+            {isLogin ? 'Log in to continue reading' : 'Create your reading adventure'}
+            <Sparkles className="w-4 h-4 text-accent" />
+          </CardDescription>
         </CardHeader>
-        
+
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
@@ -166,7 +165,7 @@ export default function Auth() {
                 )}
               </div>
             )}
-            
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -181,7 +180,7 @@ export default function Auth() {
                 <p className="text-sm text-destructive">{errors.email}</p>
               )}
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="password">Password</Label>
               <Input
@@ -196,7 +195,7 @@ export default function Auth() {
                 <p className="text-sm text-destructive">{errors.password}</p>
               )}
             </div>
-            
+
             {!isLogin && (
               <div className="space-y-2">
                 <Label htmlFor="grade" className="flex items-center gap-2">
@@ -220,7 +219,7 @@ export default function Auth() {
                 </Select>
               </div>
             )}
-            
+
             <Button
               type="submit"
               className="w-full gradient-primary text-primary-foreground font-semibold"
@@ -236,7 +235,7 @@ export default function Auth() {
               )}
             </Button>
           </form>
-          
+
           <div className="mt-6 text-center">
             <button
               type="button"
