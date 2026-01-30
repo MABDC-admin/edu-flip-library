@@ -1,93 +1,147 @@
-
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { PDFDocument } from 'https://cdn.skypack.dev/pdf-lib?dts'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
+import { PDFDocument } from "https://esm.sh/pdf-lib@1.17.1";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { bookId, pdfPath } = await req.json()
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-    if (!bookId || !pdfPath) {
-      throw new Error('Missing bookId or pdfPath')
+    // Validate the calling user is an admin
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    // initialize Supabase client
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+    // Create a client with the user's token to verify admin status
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
-    console.log(`Processing book: ${bookId} from ${pdfPath}`)
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
 
-    // 1. Download PDF
-    const { data: pdfData, error: downloadError } = await supabaseClient
-      .storage
-      .from('pdf-uploads')
-      .download(pdfPath)
+    if (claimsError || !claimsData?.claims) {
+      console.error("Auth error:", claimsError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    if (downloadError) throw downloadError
+    const userId = claimsData.claims.sub as string;
 
-    // 2. Load PDF document
-    const pdfDoc = await PDFDocument.load(await pdfData.arrayBuffer())
-    const pageCount = pdfDoc.getPageCount()
-    console.log(`Found ${pageCount} pages`)
+    // Create admin client with service role to check if user is admin
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
 
-    // 3. Process each page (Convert to PNG/Image)
-    // Note: PDF-Lib doesn't render to image directly in Deno easily without complex heavy libs (canvas).
-    // For a lightweight Edge Function, we often treat the PDF page itself as the asset or use a specific cloud convert API.
-    // However, to keep this self-contained and free, we will SPLIT the PDF into single-page PDFs.
-    // Most modern flipbook readers (like react-pageflip) can render simple images or use PDF.js on the frontend.
-    // If the frontend expects images, we usually need a specialized service (Cloudinary/Lambda) or a heavier function.
-    //
-    // Let's stick to the "Single Page PDF" strategy for reliability on Edge, 
-    // OR just return the metadata if the frontend renders the full PDF itself.
-    //
-    // For this implementation, we will assume the frontend uses PDF.js to render the main PDF,
-    // so we mainly need to just validate it works and update the page count/status.
+    const { data: roleData, error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .single();
 
-    // UPDATE: The user specifically asked for "processing of pdf into flipbook".
-    // If we can't rasterize efficiently on Edge, let's at least update the status and page count so the frontend knows it's "Ready".
+    if (roleError || roleData?.role !== "admin") {
+      console.error("Not admin:", roleError || "Role is not admin");
+      return new Response(
+        JSON.stringify({ error: "Only admins can process books" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
+    // Parse request body
+    const { bookId, pdfPath } = await req.json();
 
-    // 4. Update Database
-    const { error: updateError } = await supabaseClient
-      .from('books')
+    if (!bookId || !pdfPath) {
+      return new Response(
+        JSON.stringify({ error: "Missing bookId or pdfPath" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Processing book ${bookId} from path ${pdfPath}`);
+
+    // Download PDF from storage using admin client
+    const { data: pdfData, error: downloadError } = await supabaseAdmin.storage
+      .from("pdf-uploads")
+      .download(pdfPath);
+
+    if (downloadError || !pdfData) {
+      console.error("Download error:", downloadError);
+      // Update book status to error
+      await supabaseAdmin
+        .from("books")
+        .update({ status: "error" })
+        .eq("id", bookId);
+
+      return new Response(
+        JSON.stringify({ error: "Failed to download PDF", details: downloadError?.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Parse PDF and count pages
+    let pageCount: number;
+    try {
+      const pdfBytes = await pdfData.arrayBuffer();
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      pageCount = pdfDoc.getPageCount();
+      console.log(`PDF has ${pageCount} pages`);
+    } catch (parseError) {
+      console.error("PDF parse error:", parseError);
+      // Update book status to error
+      await supabaseAdmin
+        .from("books")
+        .update({ status: "error" })
+        .eq("id", bookId);
+
+      return new Response(
+        JSON.stringify({ error: "Failed to parse PDF", details: String(parseError) }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Update book record with page count and status
+    const { error: updateError } = await supabaseAdmin
+      .from("books")
       .update({
-        status: 'ready',
         page_count: pageCount,
-        updated_at: new Date().toISOString(),
+        status: "ready",
       })
-      .eq('id', bookId)
+      .eq("id", bookId);
 
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error("Update error:", updateError);
+      return new Response(
+        JSON.stringify({ error: "Failed to update book record", details: updateError.message }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`Book ${bookId} processed successfully with ${pageCount} pages`);
 
     return new Response(
-      JSON.stringify({
-        message: 'Book processed successfully',
-        pageCount: pageCount
-      }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200
-      }
-    )
-
+      JSON.stringify({ success: true, pageCount, bookId }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   } catch (error) {
+    console.error("Unexpected error:", error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 400
-      }
-    )
+      JSON.stringify({ error: "Internal server error", details: String(error) }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
-})
+});

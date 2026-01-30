@@ -17,6 +17,14 @@ import { GRADE_LABELS, Book } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+
+const formSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
+  gradeLevel: z.number().min(1).max(12),
+});
+
+const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
 
 const bookSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
@@ -199,8 +207,8 @@ export default function AdminBooks() {
       if (error) throw error;
 
       // 2. Cleanup storage (Optional but recommended)
-      await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]);
-      await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]);
+      await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]).catch(console.error);
+      await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-books'] });
@@ -226,8 +234,13 @@ export default function AdminBooks() {
       return;
     }
 
+    if (pdfFile.size > MAX_FILE_SIZE) {
+      setErrors({ pdf: `PDF is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
+      return;
+    }
+
     try {
-      bookSchema.parse({ title, gradeLevel });
+      formSchema.parse({ title, gradeLevel });
       setErrors({});
       createBook.mutate({ title, gradeLevel, pdfFile, coverFile });
     } catch (error) {
