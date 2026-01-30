@@ -17,19 +17,12 @@ import { GRADE_LABELS, Book } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/contexts/AuthContext';
-
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
   gradeLevel: z.number().min(1).max(12),
 });
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
-
-const bookSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
-  gradeLevel: z.number().min(1).max(12),
-});
 
 export default function AdminBooks() {
   const navigate = useNavigate();
@@ -382,7 +375,7 @@ export default function AdminBooks() {
                         ) : (
                           <>
                             <p className="text-sm font-medium">Click to upload PDF</p>
-                            <p className="text-xs text-muted-foreground">Max file size 50MB</p>
+                            <p className="text-xs text-muted-foreground">Max file size 200MB</p>
                           </>
                         )}
                       </label>
