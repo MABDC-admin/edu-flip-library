@@ -146,33 +146,18 @@ export default function AdminBooks() {
             }
 
             const arrayBuffer = await file.async('arraybuffer');
-            // Convert to base64 using browser-compatible method
-            const bytes = new Uint8Array(arrayBuffer);
-            let binary = '';
-            for (let i = 0; i < bytes.byteLength; i++) {
-              binary += String.fromCharCode(bytes[i]);
-            }
-            const base64Content = btoa(binary);
+            const blob = new Blob([arrayBuffer], { type: mime.getType(relativePath) || 'application/octet-stream' });
             const filePath = `flipbooks/${bookId}/${relativePath}`;
-            const contentType = mime.getType(relativePath) || 'application/octet-stream';
 
-            // Upload to Vercel Blob via API
-            const uploadPromise = fetch('/api/upload-html5', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                filename: filePath,
-                content: base64Content,
-                contentType
-              })
-            }).then(async res => {
-              if (!res.ok) {
-                const errorText = await res.text();
-                console.error(`Upload failed for ${filePath}:`, errorText);
-                throw new Error(`Upload failed: ${res.status}`);
-              }
-              return res.json();
-            });
+            // Upload directly to Vercel Blob (requires token in env)
+            const uploadPromise = (async () => {
+              const { put } = await import('@vercel/blob');
+              const result = await put(filePath, blob, {
+                access: 'public',
+                token: import.meta.env.VITE_BLOB_READ_WRITE_TOKEN,
+              });
+              return result;
+            })();
 
             uploadPromises.push(uploadPromise);
           }
