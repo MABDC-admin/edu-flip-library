@@ -14,9 +14,7 @@ import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { usePdfToImages } from '@/hooks/usePdfToImages';
-import { GRADE_LABELS, Book } from '@/types/database';
-import { Skeleton } from '@/components/ui/skeleton';
+import { skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 
@@ -87,22 +85,17 @@ export default function AdminBooks() {
     },
   });
 
-  const { progress: pdfProgress, processInBrowser, reset: resetPdfProgress } = usePdfToImages();
-
   const createBook = useMutation({
-    mutationFn: async ({ title, gradeLevel, pdfFile, zipFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File | null; zipFile: File | null; coverFile: File | null }) => {
+    mutationFn: async ({ title, gradeLevel, html5Url, coverFile }: { title: string; gradeLevel: number; html5Url: string; coverFile: File | null }) => {
       setIsUploading(true);
       try {
-        if (!pdfFile && !zipFile) {
-          throw new Error('Please upload either a PDF or a ZIP file.');
-        }
-        // 1. Create book record first to get ID
+        // 1. Create book record
         const { data: book, error: bookError } = await supabase
           .from('books')
           .insert({
             title,
             grade_level: gradeLevel,
-            status: 'processing',
+            status: 'ready',
             page_count: 0,
           })
           .select()
@@ -111,25 +104,9 @@ export default function AdminBooks() {
         if (bookError) throw bookError;
 
         const bookId = book.id;
-        let pdfUrl = null;
-        let html5Url = null;
         let coverUrl = null;
 
-        // 2a. Upload PDF (if provided)
-        if (pdfFile) {
-          const pdfPath = `${bookId}/source.pdf`;
-          const { error: pdfUploadError } = await supabase.storage
-            .from('pdf-uploads')
-            .upload(pdfPath, pdfFile);
-
-          if (pdfUploadError) throw pdfUploadError;
-          pdfUrl = pdfPath;
-        }
-
-        // 2b. Use HTML5 URL if provided (user uploads to their own Nginx server)
-        let html5UrlFinal = html5Url || null;
-
-        // 3. Upload Cover (if provided)
+        // 2. Upload Cover (if provided)
         if (coverFile) {
           const coverPath = `${bookId}/cover.png`;
           const { error: coverUploadError } = await supabase.storage
@@ -145,36 +122,16 @@ export default function AdminBooks() {
           coverUrl = publicUrl;
         }
 
-        // 4. Update book record with URLs
+        // 3. Update book record with URL
         const { error: updateError } = await supabase
           .from('books')
           .update({
-            pdf_url: pdfUrl,
-            html5_url: html5UrlFinal,
+            html5_url: html5Url,
             cover_url: coverUrl,
-            status: pdfFile ? 'processing' : 'ready',
           })
           .eq('id', bookId);
 
         if (updateError) throw updateError;
-
-        // 5. Render pages in-browser using Canvas + upload to storage (if PDF)
-        if (pdfFile) {
-          const pageCount = await processInBrowser(bookId, pdfFile);
-
-          // 6. Mark book as ready
-          const { error: finalUpdateError } = await supabase
-            .from('books')
-            .update({
-              page_count: pageCount,
-              status: 'ready',
-            })
-            .eq('id', bookId);
-
-          if (finalUpdateError) throw finalUpdateError;
-
-          toast({ title: 'Book uploaded & processed! 🚀' });
-        }
 
         return book;
       } finally {
@@ -185,14 +142,12 @@ export default function AdminBooks() {
       queryClient.invalidateQueries({ queryKey: ['admin-books'] });
       setIsDialogOpen(false);
       resetForm();
-      resetPdfProgress();
       toast({
-        title: 'Book uploaded! ≡ƒôÜ',
-        description: 'All pages have been processed.',
+        title: 'Book added! ≡ƒôÜ',
+        description: 'The HTML5 flipbook has been linked successfully.',
       });
     },
     onError: (error) => {
-      resetPdfProgress();
       toast({
         title: 'Upload failed',
         description: error.message,
@@ -204,7 +159,7 @@ export default function AdminBooks() {
   const resetForm = () => {
     setTitle('');
     setGradeLevel(1);
-    setPdfFile(null);
+    setHtml5Url('');
     setCoverFile(null);
     setErrors({});
   };
@@ -401,22 +356,12 @@ export default function AdminBooks() {
                       className="gradient-primary min-w-[120px]"
                     >
                       {createBook.isPending || isUploading ? (
-                        <div className="flex flex-col gap-1 items-center w-full">
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            {pdfFile && (pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering')
-                              ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
-                              : (zipFile ? 'Uploading & Extracting...' : 'Uploading...')}
-                          </div>
-                          {pdfProgress.total > 0 && (
-                            <Progress
-                              value={(pdfProgress.done / pdfProgress.total) * 100}
-                              className="h-2 w-full"
-                            />
-                          )}
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
                         </div>
                       ) : (
-                        'Upload & Create'
+                        'Add Book'
                       )}
                     </Button>
                   </div>
