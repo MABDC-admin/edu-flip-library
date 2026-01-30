@@ -262,36 +262,22 @@ export default function FlipbookReader() {
     );
   }
 
-  // HTML5 Flipbook Mode
+  // HTML5 Flipbook Mode - Redirect directly to avoid iframe issues
   if (book.html5_url) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col relative overflow-hidden font-sans">
-        <header className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent text-white z-30 pointer-events-none">
-          <div className="flex items-center gap-4 pointer-events-auto">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/bookshelf')}
-              className="text-white hover:bg-white/20 rounded-full bg-black/20 backdrop-blur-md"
-            >
-              <X className="w-6 h-6" />
-            </Button>
-            <div className="hidden sm:block">
-              <h1 className="font-display font-bold text-xl tracking-tight drop-shadow-md">
-                MABDC <span className="font-normal opacity-80 text-base ml-2 border-l border-white/30 pl-2">{book?.title}</span>
-              </h1>
-            </div>
-          </div>
-        </header>
+    useEffect(() => {
+      // Redirect to the HTML5 flipbook URL
+      window.location.href = book.html5_url;
+    }, [book.html5_url]);
 
-        <iframe
-          src={book.html5_url}
-          className="flex-1 w-full h-full border-none bg-white"
-          title={book.title}
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-          allow="fullscreen"
-          allowFullScreen
-        />
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
+          <p className="text-lg text-muted-foreground">Opening flipbook...</p>
+          <p className="text-sm text-muted-foreground">
+            If the flipbook doesn't open, <a href={book.html5_url} className="text-primary underline">click here</a>
+          </p>
+        </div>
       </div>
     );
   }

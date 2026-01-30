@@ -23,6 +23,7 @@ export interface Book {
   grade_level: number;
   cover_url: string | null;
   pdf_url: string | null;
+  html5_url: string | null;
   page_count: number;
   status: BookStatus;
   uploaded_by: string | null;
