@@ -36,7 +36,7 @@ export default function Auth() {
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      navigate('/bookshelf');
     }
   }, [user, navigate]);
 
@@ -92,7 +92,7 @@ export default function Auth() {
             title: 'Welcome back! 📚',
             description: 'Successfully logged in.',
           });
-          navigate('/');
+          navigate('/bookshelf');
         }
       } else {
         const { error } = await signUp(email, password, name, gradeLevel);
