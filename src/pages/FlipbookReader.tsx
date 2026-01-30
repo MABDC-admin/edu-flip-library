@@ -14,8 +14,6 @@ import {
   RotateCcw,
   LayoutGrid,
   BookCopy,
-  Volume2,
-  VolumeX,
   GraduationCap,
   CheckCircle2
 } from 'lucide-react';
@@ -54,29 +52,8 @@ export default function FlipbookReader() {
   const [zoom, setZoom] = useState(1);
   const [showThumbnails, setShowThumbnails] = useState(false);
   const [viewMode, setViewMode] = useState<'single' | 'double'>('single');
-  const [isSpeaking, setIsSpeaking] = useState(false);
   const [isQuizOpen, setIsQuizOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const synth = useRef<SpeechSynthesis | null>(window.speechSynthesis);
-
-  const stopSpeech = useCallback(() => {
-    if (synth.current) {
-      synth.current.cancel();
-      setIsSpeaking(false);
-    }
-  }, []);
-
-  const speakPage = useCallback((text: string) => {
-    if (!text || !synth.current) return;
-
-    stopSpeech();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-
-    setIsSpeaking(true);
-    synth.current.speak(utterance);
-  }, [stopSpeech]);
 
   // Responsive view mode
   useEffect(() => {
@@ -134,10 +111,9 @@ export default function FlipbookReader() {
 
   const handlePageChange = useCallback((page: number) => {
     if (page < 1 || page > totalPages || isFlipping) return;
-    stopSpeech();
     playFlipSound();
     goToPage(page);
-  }, [totalPages, isFlipping, goToPage, stopSpeech]);
+  }, [totalPages, isFlipping, goToPage]);
 
   const handleNext = useCallback(() => {
     const increment = viewMode === 'double' ? (currentPage === 1 ? 1 : 2) : 1;
@@ -321,28 +297,6 @@ export default function FlipbookReader() {
               </ScrollArea>
             </SheetContent>
           </Sheet>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => {
-              if (isSpeaking) {
-                stopSpeech();
-              } else {
-                const text = viewMode === 'double'
-                  ? `${leftPageData?.text_content || ''}. ${rightPageData?.text_content || ''}`
-                  : (leftPageData?.text_content || `Page ${currentPage}`);
-                speakPage(text);
-              }
-            }}
-            className={cn(
-              "text-white hover:bg-white/10",
-              isSpeaking && "text-primary animate-pulse"
-            )}
-            title={isSpeaking ? "Stop Reading" : "Read Aloud"}
-          >
-            {isSpeaking ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
-          </Button>
 
           <Dialog open={isQuizOpen} onOpenChange={setIsQuizOpen}>
             <DialogTrigger asChild>

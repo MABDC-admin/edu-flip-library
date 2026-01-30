@@ -140,6 +140,23 @@ export default function AdminBooks() {
 
         if (updateError) throw updateError;
 
+        // 5. Trigger Processing Function
+        const { error: funcError } = await supabase.functions.invoke('process-book', {
+          body: { bookId, pdfPath: pdfUrl },
+        });
+
+        if (funcError) {
+          console.error('Processing failed:', funcError);
+          // Don't throw here, as the upload was efficient. Just warn user.
+          toast({
+            title: 'Upload successful, but processing failed',
+            description: 'The book is saved but might not be ready yet.',
+            variant: 'destructive'
+          });
+        } else {
+          toast({ title: 'Book uploaded & processing started! 🚀' });
+        }
+
         return book;
       } finally {
         setIsUploading(false);
