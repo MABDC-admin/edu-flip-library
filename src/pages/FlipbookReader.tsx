@@ -288,6 +288,8 @@ export default function FlipbookReader() {
           src={book.html5_url}
           className="flex-1 w-full h-full border-none bg-white"
           title={book.title}
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+          allow="fullscreen"
           allowFullScreen
         />
       </div>
