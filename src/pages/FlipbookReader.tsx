@@ -251,13 +251,45 @@ export default function FlipbookReader() {
     );
   }
 
-  if (!book || !book.pdf_url) {
+  if (!book || (!book.pdf_url && !book.html5_url)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-lg text-muted-foreground">Book or PDF source not found</p>
+          <p className="text-lg text-muted-foreground">Book source not found</p>
           <Button onClick={() => navigate('/bookshelf')}>Back to Bookshelf</Button>
         </div>
+      </div>
+    );
+  }
+
+  // HTML5 Flipbook Mode
+  if (book.html5_url) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col relative overflow-hidden font-sans">
+        <header className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent text-white z-30 pointer-events-none">
+          <div className="flex items-center gap-4 pointer-events-auto">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/bookshelf')}
+              className="text-white hover:bg-white/20 rounded-full bg-black/20 backdrop-blur-md"
+            >
+              <X className="w-6 h-6" />
+            </Button>
+            <div className="hidden sm:block">
+              <h1 className="font-display font-bold text-xl tracking-tight drop-shadow-md">
+                MABDC <span className="font-normal opacity-80 text-base ml-2 border-l border-white/30 pl-2">{book?.title}</span>
+              </h1>
+            </div>
+          </div>
+        </header>
+
+        <iframe
+          src={book.html5_url}
+          className="flex-1 w-full h-full border-none bg-white"
+          title={book.title}
+          allowFullScreen
+        />
       </div>
     );
   }
