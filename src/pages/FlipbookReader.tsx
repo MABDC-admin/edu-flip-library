@@ -265,12 +265,16 @@ export default function FlipbookReader() {
     <div
       ref={containerRef}
       className={cn(
-        "min-h-screen bg-slate-900 flex flex-col relative overflow-hidden font-sans",
+        "min-h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black flex flex-col relative overflow-hidden font-sans",
         isFullscreen && "bg-black"
       )}
     >
+      {/* Background Decor - Subtle Glass Glows */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+
       {/* Top Overlay Bar */}
-      <header className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/80 to-transparent text-white z-30 transition-transform duration-300 pointer-events-none">
+      <header className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between bg-gradient-to-b from-black/60 to-transparent backdrop-blur-[2px] text-white z-30 transition-transform duration-300 pointer-events-none">
 
         {/* Left: Back + Title */}
         <div className="flex items-center gap-4 pointer-events-auto">
@@ -278,7 +282,7 @@ export default function FlipbookReader() {
             variant="ghost"
             size="icon"
             onClick={() => navigate('/bookshelf')}
-            className="text-white hover:bg-white/20 rounded-full"
+            className="text-white hover:bg-white/20 rounded-full backdrop-blur-md bg-black/20"
           >
             <X className="w-6 h-6" />
           </Button>
@@ -290,15 +294,15 @@ export default function FlipbookReader() {
         </div>
 
         {/* Center: Tablet Avatar (Visible 768px-1024px) */}
-        <div className="hidden md:flex lg:hidden items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-1.5 rounded-full border border-white/10 pointer-events-auto">
+        <div className="hidden md:flex lg:hidden items-center gap-3 bg-white/5 backdrop-blur-xl px-4 py-1.5 rounded-full border border-white/10 shadow-lg pointer-events-auto ring-1 ring-white/5">
           {user?.user_metadata?.avatar_url ? (
-            <img src={user.user_metadata.avatar_url} alt="Profile" className="w-6 h-6 rounded-full object-cover" />
+            <img src={user.user_metadata.avatar_url} alt="Profile" className="w-6 h-6 rounded-full object-cover ring-2 ring-white/20" />
           ) : (
-            <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center text-[10px] font-bold">
+            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-[10px] font-bold shadow-inner">
               {user?.email?.[0]?.toUpperCase() || 'U'}
             </div>
           )}
-          <span className="text-xs font-medium opacity-90 truncate max-w-[100px]">
+          <span className="text-xs font-medium opacity-90 truncate max-w-[100px] tracking-wide">
             {user?.user_metadata?.full_name || user?.email?.split('@')[0]}
           </span>
         </div>
@@ -309,7 +313,7 @@ export default function FlipbookReader() {
             variant="ghost"
             size="icon"
             onClick={toggleFullscreen}
-            className="text-white hover:bg-white/20 rounded-full"
+            className="text-white hover:bg-white/20 rounded-full backdrop-blur-md bg-black/20"
             title="Full Screen"
           >
             {isFullscreen ? <Minimize2 className="w-6 h-6" /> : <Maximize2 className="w-6 h-6" />}
@@ -333,12 +337,12 @@ export default function FlipbookReader() {
           </Document>
         </div>
 
-        {/* Navigation Arrows */}
+        {/* Navigation Arrows (Glass Style) */}
         <button
           onClick={handlePrev}
           disabled={currentPage <= 1}
           className={cn(
-            "absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/30 hover:bg-indigo-600 text-white backdrop-blur-sm transition-all shadow-lg active:scale-95 flex items-center justify-center disabled:opacity-0 disabled:pointer-events-none group",
+            "absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-20 w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 text-white backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 flex items-center justify-center disabled:opacity-0 disabled:pointer-events-none group",
             "hidden sm:flex"
           )}
         >
@@ -349,7 +353,7 @@ export default function FlipbookReader() {
           onClick={handleNext}
           disabled={currentPage >= totalPages}
           className={cn(
-            "absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-20 w-12 h-12 rounded-full bg-black/30 hover:bg-indigo-600 text-white backdrop-blur-sm transition-all shadow-lg active:scale-95 flex items-center justify-center disabled:opacity-0 disabled:pointer-events-none group",
+            "absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-20 w-14 h-14 rounded-full bg-white/5 hover:bg-white/10 text-white backdrop-blur-md border border-white/10 transition-all shadow-xl active:scale-95 flex items-center justify-center disabled:opacity-0 disabled:pointer-events-none group",
             "hidden sm:flex"
           )}
         >
@@ -358,16 +362,16 @@ export default function FlipbookReader() {
 
         {/* Book Container */}
         <div
-          className="relative transition-transform duration-300 origin-center max-w-full max-h-full flex items-center justify-center p-0 sm:p-4"
+          className="relative transition-transform duration-300 origin-center max-w-full max-h-full flex items-center justify-center p-0 sm:p-2"
           style={{ transform: `scale(${zoom})` }}
         >
           {pages && pages.length > 0 ? (
             /* Image Hybrid Mode */
             <div className={cn(
-              "relative flex transition-all duration-500 ease-out shadow-2xl overflow-hidden bg-white/5",
+              "relative flex transition-all duration-500 ease-out shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-slate-100", // Stronger shadow, better bg
               viewMode === 'double'
-                ? "aspect-[1.414] h-[auto] max-h-[85vh] w-[95vw] lg:w-auto"
-                : "aspect-[0.707] h-[auto] max-h-[85vh] w-[95vw] lg:w-auto sm:rounded-sm"
+                ? "aspect-[1.414] h-auto w-[98vw] md:h-[90vh] md:w-auto rounded-sm"
+                : "aspect-[0.707] h-auto w-[98vw] md:h-[90vh] md:w-auto rounded-sm"
             )}>
               {/* Left/Single Page */}
               <div className={cn(
@@ -395,17 +399,17 @@ export default function FlipbookReader() {
                       </div>
                     ) : <div className="bg-slate-100 w-full h-full" /> // End of book
                   )}
-                  <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-black/20 to-transparent pointer-events-none mix-blend-multiply" />
+                  <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-black/10 to-transparent pointer-events-none mix-blend-multiply" />
                 </div>
               )}
             </div>
           ) : (
             /* Fallback Mode */
-            <div className="bg-white p-4 rounded text-black shadow-2xl">
+            <div className="bg-white p-4 rounded text-black shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
               <Document file={book.pdf_url} className="flex gap-0" loading={<Loader2 className="animate-spin" />}>
-                <Page pageNumber={leftPageNum} height={window.innerHeight * 0.8} renderTextLayer={false} renderAnnotationLayer={false} />
+                <Page pageNumber={leftPageNum} height={window.innerHeight * 0.9} renderTextLayer={false} renderAnnotationLayer={false} />
                 {viewMode === 'double' && rightPageNum && rightPageNum <= totalPages && (
-                  <Page pageNumber={rightPageNum} height={window.innerHeight * 0.8} renderTextLayer={false} renderAnnotationLayer={false} />
+                  <Page pageNumber={rightPageNum} height={window.innerHeight * 0.9} renderTextLayer={false} renderAnnotationLayer={false} />
                 )}
               </Document>
             </div>
@@ -413,29 +417,32 @@ export default function FlipbookReader() {
         </div>
       </main>
 
-      {/* Thumbnail Navigation Bar (Slide up) */}
+      {/* Thumbnail Navigation Bar (Slide up) - GLASSMOPHISM & LARGE THUMBNAILS */}
       <div className={cn(
-        "absolute bottom-20 left-0 right-0 bg-black/80 backdrop-blur-xl border-t border-white/10 transition-transform duration-300 z-20",
+        "absolute bottom-20 left-0 right-0 max-h-[40vh] bg-black/60 backdrop-blur-2xl border-t border-white/10 transition-transform duration-300 z-20 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] rounded-t-2xl mx-4 lg:mx-20",
         showThumbnails ? "translate-y-0" : "translate-y-[150%]"
       )}>
-        <div className="flex items-center justify-between px-4 py-2 border-b border-white/10">
-          <span className="text-xs font-bold text-white uppercase tracking-wider">Page Navigator</span>
-          <button onClick={() => setShowThumbnails(false)} className="text-white hover:text-indigo-400"><X className="w-4 h-4" /></button>
+        <div className="flex items-center justify-between px-6 py-3 border-b border-white/5">
+          <span className="text-xs font-bold text-white/80 uppercase tracking-widest flex items-center gap-2">
+            <LayoutGrid className="w-3 h-3" /> Page Navigator
+          </span>
+          <button onClick={() => setShowThumbnails(false)} className="text-white/60 hover:text-white transition-colors bg-white/5 p-1 rounded-full"><X className="w-4 h-4" /></button>
         </div>
-        <ScrollArea className="w-full whitespace-nowrap p-4">
-          <div className="flex gap-4">
+        <ScrollArea className="w-full whitespace-nowrap p-6">
+          <div className="flex gap-6 pb-4">
             {pages?.map((p) => (
               <button
                 key={p.page_number}
                 onClick={() => { handlePageChange(p.page_number); setShowThumbnails(false); }}
                 className={cn(
-                  "relative group flex-shrink-0 w-24 aspect-[0.707] bg-white rounded-sm overflow-hidden transition-all hover:scale-105 hover:ring-2 hover:ring-indigo-500",
-                  currentPage === p.page_number && "ring-2 ring-indigo-500 scale-105"
+                  "relative group flex-shrink-0 w-32 md:w-40 aspect-[0.707] bg-white/5 rounded-md overflow-hidden transition-all duration-300 hover:scale-105 hover:ring-2 hover:ring-indigo-400 hover:shadow-lg hover:-translate-y-1",
+                  currentPage === p.page_number && "ring-2 ring-indigo-500 scale-105 shadow-xl ring-offset-2 ring-offset-black"
                 )}
               >
-                <img src={p.image_url} className="w-full h-full object-cover opacity-80 group-hover:opacity-100" loading="lazy" />
-                <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[10px] text-center py-0.5">
-                  {p.page_number}
+                <img src={p.image_url} className="w-full h-full object-cover opacity-90 group-hover:opacity-100" loading="lazy" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                <div className="absolute bottom-0 left-0 right-0 bg-black/70 backdrop-blur-sm text-white text-xs font-medium text-center py-1 border-t border-white/10">
+                  Page {p.page_number}
                 </div>
               </button>
             ))}
@@ -443,42 +450,42 @@ export default function FlipbookReader() {
         </ScrollArea>
       </div>
 
-      {/* Floating Bottom Controls */}
-      <footer className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 p-2 pl-4 pr-2 rounded-full bg-black/70 backdrop-blur-xl border border-white/10 shadow-2xl transition-all">
+      {/* Floating Bottom Controls - GLASSMOPHISM */}
+      <footer className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 flex items-center gap-4 p-2 pl-5 pr-3 rounded-full bg-black/50 backdrop-blur-xl border border-white/10 shadow-2xl transition-all hover:bg-black/60 ring-1 ring-white/5">
 
         {/* Thumbnails Toggle */}
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setShowThumbnails(!showThumbnails)}
-          className={cn("text-white/80 hover:text-white hover:bg-white/10 rounded-full h-8 w-8", showThumbnails && "text-indigo-400 bg-white/10")}
+          className={cn("text-white/80 hover:text-white hover:bg-white/10 rounded-full h-9 w-9 transition-all", showThumbnails && "text-indigo-400 bg-white/10 shadow-inner")}
           title="Show Thumbnails"
         >
           <LayoutGrid className="w-4 h-4" />
         </Button>
 
-        <div className="h-4 w-[1px] bg-white/20" />
+        <div className="h-5 w-[1px] bg-white/10" />
 
         {/* Page Count */}
-        <div className="flex items-center gap-3 text-white font-medium font-mono text-sm min-w-[80px] justify-center cursor-pointer hover:text-indigo-400 transition-colors" onClick={() => setShowThumbnails(true)}>
-          <span>{currentPage}</span>
+        <div className="flex items-center gap-3 text-white font-medium font-mono text-sm min-w-[80px] justify-center cursor-pointer hover:text-indigo-400 transition-colors select-none group" onClick={() => setShowThumbnails(true)}>
+          <span className="group-hover:scale-110 transition-transform">{currentPage}</span>
           <span className="opacity-40">/</span>
-          <span>{totalPages}</span>
+          <span className="opacity-80">{totalPages}</span>
         </div>
 
-        <div className="h-4 w-[1px] bg-white/20" />
+        <div className="h-5 w-[1px] bg-white/10" />
 
         {/* View Mode */}
-        <Button variant="ghost" size="icon" onClick={() => setViewMode(v => v === 'single' ? 'double' : 'single')} className="text-white/80 hover:text-white hover:bg-white/10 rounded-full h-8 w-8 hidden sm:flex">
+        <Button variant="ghost" size="icon" onClick={() => setViewMode(v => v === 'single' ? 'double' : 'single')} className="text-white/80 hover:text-white hover:bg-white/10 rounded-full h-9 w-9 hidden sm:flex transition-transform hover:scale-105">
           {viewMode === 'double' ? <BookCopy className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
         </Button>
 
         {/* Zoom */}
-        <div className="flex items-center gap-1 bg-white/10 rounded-full p-0.5">
-          <Button variant="ghost" size="icon" onClick={zoomOut} className="text-white hover:text-white hover:bg-white/10 rounded-full h-7 w-7">
+        <div className="flex items-center gap-1 bg-white/5 rounded-full p-0.5 border border-white/5">
+          <Button variant="ghost" size="icon" onClick={zoomOut} className="text-white hover:text-white hover:bg-white/10 rounded-full h-8 w-8">
             <ZoomOut className="w-3 h-3" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={zoomIn} className="text-white hover:text-white hover:bg-white/10 rounded-full h-7 w-7">
+          <Button variant="ghost" size="icon" onClick={zoomIn} className="text-white hover:text-white hover:bg-white/10 rounded-full h-8 w-8">
             <ZoomIn className="w-3 h-3" />
           </Button>
         </div>
