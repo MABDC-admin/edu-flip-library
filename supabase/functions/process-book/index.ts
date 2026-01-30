@@ -1,11 +1,9 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
 
-// Import pdf.js legacy build that works without web workers
-import * as pdfjs from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
-
-// Disable worker - required for Deno edge functions
-pdfjs.GlobalWorkerOptions.workerSrc = "";
+// Use pdfjs-serverless - optimized for Deno/serverless environments (no worker required)
+// deno-lint-ignore no-explicit-any
+const pdfjs: any = await import("https://esm.sh/pdfjs-serverless@0.5.1");
 
 // Deno type declarations for OffscreenCanvas (Web API available in Deno)
 declare const OffscreenCanvas: {
@@ -54,12 +52,10 @@ Deno.serve(async (req) => {
 
     if (downloadError || !pdfData) throw new Error(`Download error: ${downloadError?.message}`);
 
-    const pdfBytes = await pdfData.arrayBuffer();
+    const pdfBytes = new Uint8Array(await pdfData.arrayBuffer());
     
-    // Load PDF with worker disabled for Deno compatibility
-    const loadingTask = pdfjs.getDocument({ 
-      data: pdfBytes,
-    } as any);
+    // Load PDF using pdfjs-serverless (no worker needed)
+    const loadingTask = pdfjs.getDocument({ data: pdfBytes, useSystemFonts: true });
     const pdfDocument = await loadingTask.promise;
     const pageCount = pdfDocument.numPages;
 
