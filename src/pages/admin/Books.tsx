@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Upload, Plus, Trash2, BookOpen, Loader2 } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -26,8 +26,11 @@ const bookSchema = z.object({
 export default function AdminBooks() {
   const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [title, setTitle] = useState('');
   const [gradeLevel, setGradeLevel] = useState<number>(1);
+  const [filterGrade, setFilterGrade] = useState<string>('all');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -50,9 +53,34 @@ export default function AdminBooks() {
     },
   });
 
-  const filteredBooks = books?.filter(book =>
-    book.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredBooks = books?.filter(book => {
+    const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesGrade = filterGrade === 'all' || book.grade_level === parseInt(filterGrade);
+    return matchesSearch && matchesGrade;
+  });
+
+  const updateBook = useMutation({
+    mutationFn: async ({ id, title, gradeLevel }: { id: string; title: string; gradeLevel: number }) => {
+      const { data, error } = await supabase
+        .from('books')
+        .update({ title, grade_level: gradeLevel })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+      setIsEditOpen(false);
+      setEditingBook(null);
+      toast({ title: 'Book updated! ✅' });
+    },
+    onError: (error) => {
+      toast({ title: 'Update failed', description: error.message, variant: 'destructive' });
+    },
+  });
 
   const createBook = useMutation({
     mutationFn: async ({ title, gradeLevel, pdfFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File; coverFile: File | null }) => {
@@ -216,7 +244,7 @@ export default function AdminBooks() {
       <div className="space-y-6">
         {/* Actions bar */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">
-          <div className="flex flex-1 gap-2 max-w-md">
+          <div className="flex flex-1 gap-2 max-w-2xl">
             <div className="relative flex-1">
               <Input
                 placeholder="Search books..."
@@ -226,6 +254,21 @@ export default function AdminBooks() {
               />
               <BookOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             </div>
+
+            <Select value={filterGrade} onValueChange={setFilterGrade}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Grades</SelectItem>
+                {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button className="gradient-primary" onClick={resetForm}>
@@ -396,6 +439,20 @@ export default function AdminBooks() {
                           <Button
                             variant="ghost"
                             size="icon"
+                            onClick={() => {
+                              setEditingBook(book);
+                              setTitle(book.title);
+                              setGradeLevel(book.grade_level);
+                              setIsEditOpen(true);
+                            }}
+                            title="Edit Book"
+                            className="text-accent hover:bg-accent/10"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={() => navigate(`/read/${book.id}`)}
                             title="View Flipbook"
                             className="text-primary hover:bg-primary/10"
@@ -421,18 +478,75 @@ export default function AdminBooks() {
             ) : (
               <div className="p-12 text-center">
                 <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No books yet</h3>
+                <h3 className="text-lg font-semibold mb-2">No books found</h3>
                 <p className="text-muted-foreground mb-4">
-                  Start by adding your first book to the library
+                  {searchQuery || filterGrade !== 'all'
+                    ? "Try adjusting your filters to find what you're looking for"
+                    : "Start by adding your first book to the library"}
                 </p>
-                <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Book
-                </Button>
+                {!searchQuery && filterGrade === 'all' && (
+                  <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Book
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>
         </Card>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Book Details</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Book Title</Label>
+                <Input
+                  id="edit-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-grade">Grade Level</Label>
+                <Select
+                  value={gradeLevel.toString()}
+                  onValueChange={(value) => setGradeLevel(parseInt(value))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="gradient-primary"
+                  onClick={() => editingBook && updateBook.mutate({
+                    id: editingBook.id,
+                    title,
+                    gradeLevel
+                  })}
+                  disabled={updateBook.isPending}
+                >
+                  {updateBook.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AdminLayout>
   );

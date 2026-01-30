@@ -1,10 +1,10 @@
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { 
-  BookOpen, 
-  Users, 
-  LayoutDashboard, 
+import {
+  BookOpen,
+  Users,
+  LayoutDashboard,
   LogOut,
   Menu,
   X
@@ -19,7 +19,7 @@ interface AdminLayoutProps {
 
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/admin/books', label: 'Books', icon: BookOpen },
+  { href: '/admin/books', label: 'Manage Books', icon: BookOpen },
   { href: '/admin/students', label: 'Students', icon: Users },
 ];
 
@@ -67,7 +67,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 
       {/* Sidebar overlay */}
       {isSidebarOpen && (
-        <div 
+        <div
           className="lg:hidden fixed inset-0 bg-black/50 z-40"
           onClick={() => setIsSidebarOpen(false)}
         />
@@ -129,7 +129,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
                 <p className="text-xs text-muted-foreground">Administrator</p>
               </div>
             </div>
-            
+
             <Button
               variant="outline"
               className="w-full"
@@ -149,7 +149,7 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
             {title}
           </h1>
         </header>
-        
+
         <div className="p-6 lg:p-8">
           {children}
         </div>
