@@ -37,6 +37,7 @@ export default function AdminBooks() {
   const [gradeLevel, setGradeLevel] = useState<number>(1);
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [zipFile, setZipFile] = useState<File | null>(null);
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploading, setIsUploading] = useState(false);
