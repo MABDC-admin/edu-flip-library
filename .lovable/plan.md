@@ -1,101 +1,141 @@
 
 
-# EduFlip Library - Implementation Plan
+# Implementation Plan: `process-book` Edge Function
 
 ## Overview
-A playful, colorful educational e-book platform where administrators can upload PDF books, automatically convert them to interactive flipbooks, and students can access grade-appropriate content with a beautiful 3D page-turning reading experience.
+Create a Supabase Edge Function that processes uploaded PDFs by counting their pages and updating the book record status from "processing" to "ready".
 
 ---
 
-## 🎨 Design & Visual Style
-- **Theme**: Playful & colorful with bright gradients, rounded shapes, and fun animations
-- **Color Palette**: Vibrant blues, oranges, greens, and purples - different accent colors per grade level
-- **Typography**: Friendly, readable fonts suitable for all ages
-- **Icons & Illustrations**: Book-themed decorative elements, mascot characters
+## Architecture Flow
+
+```text
+Frontend (Admin Books)          Edge Function                   Supabase
+       |                             |                              |
+       |-- POST /process-book ------>|                              |
+       |   { bookId, pdfPath }       |                              |
+       |                             |-- Download PDF ------------->|
+       |                             |   (pdf-uploads bucket)       |
+       |                             |<-- PDF binary data ---------|
+       |                             |                              |
+       |                             |-- Parse with pdf-lib        |
+       |                             |   (count pages)              |
+       |                             |                              |
+       |                             |-- UPDATE books ------------->|
+       |                             |   page_count, status='ready' |
+       |                             |<-- Success -----------------|
+       |<-- { success, pageCount } --|                              |
+```
 
 ---
 
-## 📚 Core Features
+## Implementation Steps
 
-### 1. Student Library & Bookshelf
-- **Grade-filtered book grid** showing only books matching student's grade level
-- **Colorful book covers** with title, page count, and reading progress indicator
-- **Simple categories**: All Books, Currently Reading, Completed
-- **Search functionality** within available books
+### 1. Create Edge Function Directory & Files
 
-### 2. 3D Flipbook Reader (Heyzine-style)
-- **Realistic page curl animations** with shadows and lighting effects
-- **Smooth page turning** using mouse drag, click arrows, or keyboard
-- **Zoom controls** with click-to-zoom on specific areas
-- **Fullscreen mode** for distraction-free reading
-- **Progress bar** showing current position and page numbers
-- **Auto-save reading position** - pick up where you left off
-- **Mobile touch support**: Swipe gestures, pinch-to-zoom
+**File: `supabase/functions/process-book/index.ts`**
 
-### 3. Admin Dashboard
-- **Overview panel**: Total books, students per grade, recent activity
-- **Book upload wizard**: Drag-and-drop PDF upload with grade assignment
-- **Automatic PDF processing**: Server-side conversion to optimized page images
-- **Student management**: Create accounts, assign grades, bulk CSV import
-- **Simple analytics**: Reading activity by grade level
+The function will:
+- Accept POST requests with `bookId` and `pdfPath` in the body
+- Use the service role client to download the PDF from private storage
+- Parse the PDF using `pdf-lib` to count pages
+- Update the `books` table with `page_count` and `status = 'ready'`
+- Handle errors gracefully, setting `status = 'error'` on failure
 
----
+Key implementation details:
+- Uses `npm:pdf-lib` for reliable PDF parsing in Deno
+- Creates admin client with `SUPABASE_SERVICE_ROLE_KEY` for storage access
+- Includes CORS headers for browser requests
+- Validates admin authentication before processing
 
-## 👥 User Roles & Access
+### 2. Update `supabase/config.toml`
 
-### Students
-- Login with email/password
-- View only grade-appropriate books
-- Read books with full flipbook experience
-- Track personal reading progress
+Add function configuration with JWT verification disabled (we'll verify auth in code):
 
-### Administrators
-- Full dashboard access
-- Upload and manage books
-- Create and manage student accounts
-- View reading analytics
+```toml
+[functions.process-book]
+verify_jwt = false
+```
 
----
+### 3. Update Frontend to Call the Function
 
-## 🔧 Technical Architecture
+**File: `src/pages/admin/Books.tsx`**
 
-### Backend (Supabase Cloud)
-- **Authentication**: Email/password with role-based access (admin/student)
-- **Database Tables**: Books, Students/Profiles, User Roles, Reading Progress
-- **Storage**: Book page images in Supabase Storage buckets
-- **Edge Functions**: PDF-to-image conversion processing
+After uploading the PDF, the `createBook` mutation will invoke the edge function:
 
-### Frontend (React + TypeScript)
-- **Flipbook engine**: CSS3 transforms with 3D perspective for page curl effects
-- **Image preloading**: Load 3-5 pages ahead for smooth reading
-- **Responsive design**: Optimized layouts for desktop, tablet, and mobile
-- **Touch gesture handling**: Native swipe and pinch support
+```typescript
+// After file uploads complete
+await supabase.functions.invoke('process-book', {
+  body: { bookId, pdfPath: `${bookId}/source.pdf` }
+});
+```
+
+This triggers the processing automatically when a book is created.
 
 ---
 
-## 📱 Pages & Navigation
+## Technical Details
 
-1. **Landing/Login Page** - Welcoming login for students and admins
-2. **Student Bookshelf** - Personal library with grade-appropriate books
-3. **Flipbook Reader** - Immersive reading experience
-4. **Admin Dashboard** - Overview and quick actions
-5. **Admin: Book Management** - Upload and organize books
-6. **Admin: Student Management** - Create and manage accounts
+### Edge Function Code Structure
+
+```typescript
+// 1. CORS headers for browser access
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, ...'
+}
+
+// 2. Create admin client with service role
+const supabaseAdmin = createClient(url, serviceRoleKey)
+
+// 3. Download PDF from private bucket
+const { data: pdfData } = await supabaseAdmin.storage
+  .from('pdf-uploads')
+  .download(pdfPath)
+
+// 4. Count pages using pdf-lib
+const pdfDoc = await PDFDocument.load(await pdfData.arrayBuffer())
+const pageCount = pdfDoc.getPageCount()
+
+// 5. Update book record
+await supabaseAdmin.from('books')
+  .update({ page_count: pageCount, status: 'ready' })
+  .eq('id', bookId)
+```
+
+### Security Considerations
+- Function validates the calling user is an admin before processing
+- Uses service role key only server-side (never exposed to client)
+- PDF bucket remains private - only edge function can access via admin client
 
 ---
 
-## 🚀 Key Interactions
+## Files to Create/Modify
 
-- **Uploading a book**: Admin drags PDF → assigns grade level → system converts to page images → book appears in student libraries
-- **Reading a book**: Student clicks book cover → flipbook opens → realistic page turns → progress auto-saved
-- **Student onboarding**: Admin creates account or bulk imports → student receives credentials → logs in to see their books
+| File | Action | Purpose |
+|------|--------|---------|
+| `supabase/functions/process-book/index.ts` | Create | Main edge function logic |
+| `supabase/config.toml` | Update | Add function configuration |
+| `src/pages/admin/Books.tsx` | Update | Call edge function after upload |
 
 ---
 
-## 📋 Success Criteria
-- Books open in under 2 seconds
-- Smooth 60fps page flip animations
-- Works seamlessly on desktop, tablet, and mobile
-- Clear visual hierarchy making navigation intuitive
-- Grade-level access strictly enforced
+## Bug Fixes (Existing TypeScript Errors)
+
+The following minor fixes will also be applied:
+
+1. **`src/components/ui/calendar.tsx`** - Remove unused `_props` parameter declarations
+2. **`src/contexts/AuthContext.tsx`** - Prefix unused `event` parameter with underscore
+
+---
+
+## Expected Outcome
+
+After implementation:
+1. Admin uploads a PDF book
+2. Book is created with `status: 'processing'`
+3. Edge function is automatically invoked
+4. PDF is downloaded and page count is extracted
+5. Book record is updated with `page_count` and `status: 'ready'`
+6. Students can now see the book in their grade-filtered library
 
