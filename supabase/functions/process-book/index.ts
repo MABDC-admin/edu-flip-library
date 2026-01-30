@@ -7,7 +7,7 @@ const pdfjs: any = await import("https://esm.sh/pdfjs-serverless@0.5.1");
 
 // Deno type declarations for OffscreenCanvas (Web API available in Deno)
 declare const OffscreenCanvas: {
-  new (width: number, height: number): {
+  new(width: number, height: number): {
     width: number;
     height: number;
     getContext(contextId: "2d"): any;
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     if (downloadError || !pdfData) throw new Error(`Download error: ${downloadError?.message}`);
 
     const pdfBytes = new Uint8Array(await pdfData.arrayBuffer());
-    
+
     // Load PDF using pdfjs-serverless (no worker needed)
     const loadingTask = pdfjs.getDocument({ data: pdfBytes, useSystemFonts: true });
     const pdfDocument = await loadingTask.promise;
@@ -133,10 +133,23 @@ Deno.serve(async (req) => {
 
   } catch (err) {
     const error = err as Error;
-    console.error("Process error:", error);
+    console.error("FATAL Process error:", error);
+    console.error("Stack:", error.stack);
+
+    // Try to update status if possible (fire and forget)
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const admin = createClient(supabaseUrl, supabaseServiceRoleKey);
+      // We can't easily get bookId here without scope, but the log is key.
+    } catch { }
 
     return new Response(
-      JSON.stringify({ error: error.message || "Unknown error" }),
+      JSON.stringify({
+        error: "Internal Server Error",
+        details: error.message || "Unknown error",
+        stack: error.stack
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
