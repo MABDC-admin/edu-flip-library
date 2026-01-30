@@ -1,1 +1,0 @@
-﻿positionForPages[38]={page:38,positions:[{word:"Sample Grid Paper Template (100   100) ",left:0.117647,top:0.089258,width:0.355770,height:0.020636},{word:"  × ",left:0.413794,top:0.091742,width:0.016902,height:0.016925},{word:"  38 ",left:0.851754,top:0.933250,width:0.026883,height:0.017758}]};
