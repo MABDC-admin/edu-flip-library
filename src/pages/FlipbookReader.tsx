@@ -264,18 +264,19 @@ export default function FlipbookReader() {
 
   // HTML5 Flipbook Mode - Redirect directly to Supabase URL
   if (book.html5_url) {
-    // Redirect immediately - no iframe needed
-    window.location.href = book.html5_url;
-
-    // Show loading while redirecting
+    // Display in iframe
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
-          <p className="text-lg text-muted-foreground">Opening flipbook...</p>
-        </div>
+      <div className="min-h-screen bg-background">
+        <iframe
+          src={book.html5_url}
+          className="w-full h-screen border-0"
+          title={book.title}
+          allow="fullscreen"
+        />
       </div>
     );
+
+
   }
 
   return (
