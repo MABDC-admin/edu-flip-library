@@ -263,12 +263,13 @@ export default function FlipbookReader() {
   }
 
   // HTML5 Flipbook Mode - Redirect directly to avoid iframe issues
-  if (book.html5_url) {
-    useEffect(() => {
-      // Redirect to the HTML5 flipbook URL
+  useEffect(() => {
+    if (book.html5_url) {
       window.location.href = book.html5_url;
-    }, [book.html5_url]);
+    }
+  }, [book.html5_url]);
 
+  if (book.html5_url) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
