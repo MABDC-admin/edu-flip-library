@@ -9,10 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
 import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { usePdfToImages } from '@/hooks/usePdfToImages';
 import { GRADE_LABELS, Book } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
@@ -83,6 +85,8 @@ export default function AdminBooks() {
     },
   });
 
+  const { progress: pdfProgress, processInBrowser, reset: resetPdfProgress } = usePdfToImages();
+
   const createBook = useMutation({
     mutationFn: async ({ title, gradeLevel, pdfFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File; coverFile: File | null }) => {
       setIsUploading(true);
@@ -141,22 +145,21 @@ export default function AdminBooks() {
 
         if (updateError) throw updateError;
 
-        // 5. Trigger Processing Function
-        const { error: funcError } = await supabase.functions.invoke('process-book', {
-          body: { bookId, pdfPath: pdfUrl },
-        });
+        // 5. Render pages in-browser using Canvas + upload to storage
+        const pageCount = await processInBrowser(bookId, pdfFile);
 
-        if (funcError) {
-          console.error('Processing failed:', funcError);
-          // Don't throw here, as the upload was efficient. Just warn user.
-          toast({
-            title: 'Upload successful, but processing failed',
-            description: 'The book is saved but might not be ready yet.',
-            variant: 'destructive'
-          });
-        } else {
-          toast({ title: 'Book uploaded & processing started! 🚀' });
-        }
+        // 6. Mark book as ready
+        const { error: finalUpdateError } = await supabase
+          .from('books')
+          .update({
+            page_count: pageCount,
+            status: 'ready',
+          })
+          .eq('id', bookId);
+
+        if (finalUpdateError) throw finalUpdateError;
+
+        toast({ title: 'Book uploaded & processed! 🚀' });
 
         return book;
       } finally {
@@ -167,12 +170,14 @@ export default function AdminBooks() {
       queryClient.invalidateQueries({ queryKey: ['admin-books'] });
       setIsDialogOpen(false);
       resetForm();
+      resetPdfProgress();
       toast({
         title: 'Book uploaded! 📚',
-        description: 'The PDF is being processed into flipbook pages.',
+        description: 'All pages have been processed.',
       });
     },
     onError: (error) => {
+      resetPdfProgress();
       toast({
         title: 'Upload failed',
         description: error.message,
@@ -400,10 +405,20 @@ export default function AdminBooks() {
                       className="gradient-primary min-w-[120px]"
                     >
                       {createBook.isPending || isUploading ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
+                        <div className="flex flex-col gap-1 items-center w-full">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering'
+                              ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
+                              : 'Uploading...'}
+                          </div>
+                          {pdfProgress.total > 0 && (
+                            <Progress
+                              value={(pdfProgress.done / pdfProgress.total) * 100}
+                              className="h-2 w-full"
+                            />
+                          )}
+                        </div>
                       ) : (
                         'Upload & Create'
                       )}
