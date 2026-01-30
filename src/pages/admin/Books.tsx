@@ -19,14 +19,13 @@ import { GRADE_LABELS, Book } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
-import JSZip from 'jszip';
-import mime from 'mime';
+
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
   gradeLevel: z.number().min(1).max(12),
 });
 
-const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+
 
 export default function AdminBooks() {
   const navigate = useNavigate();
@@ -36,9 +35,9 @@ export default function AdminBooks() {
   const [title, setTitle] = useState('');
   const [gradeLevel, setGradeLevel] = useState<number>(1);
   const [filterGrade, setFilterGrade] = useState<string>('all');
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
-  const [zipFile, setZipFile] = useState<File | null>(null);
+
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [html5Url, setHtml5Url] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,49 +126,8 @@ export default function AdminBooks() {
           pdfUrl = pdfPath;
         }
 
-        // 2b. Process ZIP (HTML5 Flipbook) - Upload to Supabase
-        if (zipFile) {
-          const zip = new JSZip();
-          const contents = await zip.loadAsync(zipFile);
-
-          let indexHtmlPath = null;
-          const uploadPromises: Promise<any>[] = [];
-
-          // Upload all files in the ZIP
-          for (const [relativePath, file] of Object.entries(contents.files)) {
-            if (file.dir) continue;
-
-            if (relativePath.endsWith('index.html') || relativePath.endsWith('index.htm')) {
-              if (!indexHtmlPath || relativePath.length < indexHtmlPath.length) {
-                indexHtmlPath = relativePath;
-              }
-            }
-
-            const blob = await file.async('blob');
-            const filePath = `${bookId}/${relativePath}`;
-
-            const uploadPromise = supabase.storage
-              .from('html5-uploads')
-              .upload(filePath, blob, {
-                contentType: mime.getType(relativePath) || 'application/octet-stream',
-                cacheControl: '3600',
-                upsert: true
-              });
-
-            uploadPromises.push(uploadPromise);
-          }
-
-          toast({ title: `Extracting and uploading ${uploadPromises.length} files...`, description: "This might take a moment." });
-          await Promise.all(uploadPromises);
-
-          if (indexHtmlPath) {
-            // Use proxy to serve files with correct headers
-            html5Url = `/api/flipbook-proxy?path=${encodeURIComponent(`${bookId}/${indexHtmlPath}`)}`;
-          } else {
-            console.warn("No index.html found in ZIP archive.");
-            toast({ title: "Warning", description: "No index.html found in ZIP. HTML5 view might not work.", variant: "destructive" });
-          }
-        }
+        // 2b. Use HTML5 URL if provided (user uploads to their own Nginx server)
+        let html5UrlFinal = html5Url || null;
 
         // 3. Upload Cover (if provided)
         if (coverFile) {
@@ -192,7 +150,7 @@ export default function AdminBooks() {
           .from('books')
           .update({
             pdf_url: pdfUrl,
-            html5_url: html5Url,
+            html5_url: html5UrlFinal,
             cover_url: coverUrl,
             status: pdfFile ? 'processing' : 'ready',
           })
@@ -284,25 +242,15 @@ export default function AdminBooks() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!pdfFile && !zipFile) {
-      setErrors({ pdf: 'Please upload either a PDF or a ZIP file.' });
-      return;
-    }
-
-    if (pdfFile && pdfFile.size > MAX_FILE_SIZE) {
-      setErrors({ pdf: `PDF is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
-      return;
-    }
-
-    if (zipFile && zipFile.size > MAX_FILE_SIZE) {
-      setErrors({ zip: `ZIP is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
+    if (!html5Url || !html5Url.trim()) {
+      setErrors({ html5Url: 'Please provide an HTML5 flipbook URL.' });
       return;
     }
 
     try {
       formSchema.parse({ title, gradeLevel });
       setErrors({});
-      createBook.mutate({ title, gradeLevel, pdfFile, zipFile, coverFile });
+      createBook.mutate({ title, gradeLevel, html5Url, coverFile });
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Record<string, string> = {};
@@ -420,68 +368,21 @@ export default function AdminBooks() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pdf">Course PDF File</Label>
-                    <div className={cn(
-                      "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                      pdfFile ? "border-primary/50 bg-primary/5" : "border-slate-200 hover:border-primary/30"
-                    )}>
-                      <input
-                        id="pdf"
-                        type="file"
-                        accept=".pdf"
-                        onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                        className="hidden"
-                      />
-                      <label htmlFor="pdf" className="cursor-pointer">
-                        <Upload className={cn("w-8 h-8 mx-auto mb-2", pdfFile ? "text-primary" : "text-muted-foreground")} />
-                        {pdfFile ? (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-primary line-clamp-1">{pdfFile.name}</p>
-                            <p className="text-xs text-muted-foreground">{(pdfFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-sm font-medium">Click to upload PDF</p>
-                            <p className="text-xs text-muted-foreground">Max file size 200MB</p>
-                          </>
-                        )}
-                      </label>
-                    </div>
-                    {errors.pdf && (
-                      <p className="text-sm text-destructive">{errors.pdf}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="zip">HTML5 Flipbook (ZIP)</Label>
-                    <div className={cn(
-                      "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                      zipFile ? "border-primary/50 bg-primary/5" : "border-slate-200 hover:border-primary/30"
-                    )}>
-                      <input
-                        id="zip"
-                        type="file"
-                        accept=".zip"
-                        onChange={(e) => setZipFile(e.target.files?.[0] || null)}
-                        className="hidden"
-                      />
-                      <label htmlFor="zip" className="cursor-pointer">
-                        <Upload className={cn("w-8 h-8 mx-auto mb-2", zipFile ? "text-primary" : "text-muted-foreground")} />
-                        {zipFile ? (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-primary line-clamp-1">{zipFile.name}</p>
-                            <p className="text-xs text-muted-foreground">{(zipFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-sm font-medium">Click to upload ZIP archive</p>
-                            <p className="text-xs text-muted-foreground">HTML5 flipbook with index.html</p>
-                          </>
-                        )}
-                      </label>
-                    </div>
-                    {errors.zip && (
-                      <p className="text-sm text-destructive">{errors.zip}</p>
+                    <Label htmlFor="html5url">HTML5 Flipbook URL *</Label>
+                    <Input
+                      id="html5url"
+                      type="url"
+                      value={html5Url}
+                      onChange={(e) => setHtml5Url(e.target.value)}
+                      placeholder="https://yourserver.com/flipbooks/book1/index.html"
+                      className="text-sm"
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Upload HTML5 flipbook to your Nginx server and paste the index.html URL here
+                    </p>
+                    {errors.html5Url && (
+                      <p className="text-sm text-destructive">{errors.html5Url}</p>
                     )}
                   </div>
 
@@ -496,7 +397,7 @@ export default function AdminBooks() {
                     </Button>
                     <Button
                       type="submit"
-                      disabled={createBook.isPending || isUploading || (!pdfFile && !zipFile)}
+                      disabled={createBook.isPending || isUploading || !html5Url}
                       className="gradient-primary min-w-[120px]"
                     >
                       {createBook.isPending || isUploading ? (
