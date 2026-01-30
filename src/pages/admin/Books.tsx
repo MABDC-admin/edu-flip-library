@@ -165,7 +165,14 @@ export default function AdminBooks() {
                 content: base64Content,
                 contentType
               })
-            }).then(res => res.json());
+            }).then(async res => {
+              if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`Upload failed for ${filePath}:`, errorText);
+                throw new Error(`Upload failed: ${res.status}`);
+              }
+              return res.json();
+            });
 
             uploadPromises.push(uploadPromise);
           }
