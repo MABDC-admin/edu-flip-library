@@ -163,10 +163,8 @@ export default function AdminBooks() {
           await Promise.all(uploadPromises);
 
           if (indexHtmlPath) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('html5-uploads')
-              .getPublicUrl(`${bookId}/${indexHtmlPath}`);
-            html5Url = publicUrl;
+            // Use proxy to serve files with correct headers
+            html5Url = `/api/flipbook-proxy?path=${encodeURIComponent(`${bookId}/${indexHtmlPath}`)}`;
           } else {
             console.warn("No index.html found in ZIP archive.");
             toast({ title: "Warning", description: "No index.html found in ZIP. HTML5 view might not work.", variant: "destructive" });
