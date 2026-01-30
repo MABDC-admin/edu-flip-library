@@ -26,9 +26,9 @@ export default function Bookshelf() {
   // Filter books by category
   const allBooks = books || [];
   const currentlyReading = allBooks.filter(
-    (book) => book.reading_progress && 
-              book.reading_progress.current_page > 1 && 
-              !book.reading_progress.completed
+    (book) => book.reading_progress &&
+      book.reading_progress.current_page > 1 &&
+      !book.reading_progress.completed
   );
   const completedBooks = allBooks.filter(
     (book) => book.reading_progress?.completed
@@ -48,7 +48,7 @@ export default function Bookshelf() {
               <p className="text-xs text-muted-foreground">Library</p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="font-medium">{profile?.name}</p>
@@ -56,17 +56,28 @@ export default function Bookshelf() {
                 {profile?.grade_level ? GRADE_LABELS[profile.grade_level] : 'Student'}
               </p>
             </div>
-            
+
             {isAdmin && (
-              <Button
-                variant="outline"
-                onClick={() => navigate('/admin')}
-                className="hidden sm:flex"
-              >
-                Admin Dashboard
-              </Button>
+              <div className="hidden sm:flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate('/admin')}
+                >
+                  Dashboard
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => navigate('/admin/books')}
+                  className="gradient-primary"
+                >
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Manage Books
+                </Button>
+              </div>
             )}
-            
+
             <Button variant="ghost" size="icon" onClick={handleSignOut}>
               <LogOut className="w-5 h-5" />
             </Button>
@@ -129,22 +140,22 @@ export default function Bookshelf() {
           ) : (
             <>
               <TabsContent value="all">
-                <BookGrid 
+                <BookGrid
                   books={allBooks}
                   showSearch
                   emptyMessage="No books available for your grade level yet"
                 />
               </TabsContent>
-              
+
               <TabsContent value="reading">
-                <BookGrid 
+                <BookGrid
                   books={currentlyReading}
                   emptyMessage="You're not currently reading any books"
                 />
               </TabsContent>
-              
+
               <TabsContent value="completed">
-                <BookGrid 
+                <BookGrid
                   books={completedBooks}
                   emptyMessage="You haven't completed any books yet"
                 />

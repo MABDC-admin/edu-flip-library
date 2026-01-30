@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { BookOpen, Users, TrendingUp, Clock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -148,35 +149,41 @@ export default function AdminDashboard() {
         {/* Quick actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card
-            className="hover:shadow-card transition-shadow cursor-pointer group"
+            className="hover:shadow-card transition-shadow cursor-pointer group relative overflow-hidden"
             onClick={() => navigate('/admin/books')}
           >
             <CardContent className="flex items-center gap-4 p-6">
               <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center group-hover:scale-110 transition-transform">
                 <BookOpen className="w-6 h-6 text-primary-foreground" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="font-semibold text-lg">Manage Books</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground mb-3">
                   Upload PDFs and organize your library
                 </p>
+                <Button size="sm" variant="secondary" className="group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  Open Library
+                </Button>
               </div>
             </CardContent>
           </Card>
 
           <Card
-            className="hover:shadow-card transition-shadow cursor-pointer group"
+            className="hover:shadow-card transition-shadow cursor-pointer group relative overflow-hidden"
             onClick={() => navigate('/admin/students')}
           >
             <CardContent className="flex items-center gap-4 p-6">
               <div className="w-12 h-12 rounded-xl gradient-success flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Users className="w-6 h-6 text-success-foreground" />
               </div>
-              <div>
+              <div className="flex-1">
                 <h3 className="font-semibold text-lg">Manage Students</h3>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted-foreground mb-3">
                   Create accounts and assign grades
                 </p>
+                <Button size="sm" variant="secondary" className="group-hover:bg-success group-hover:text-success-foreground transition-colors">
+                  View Students
+                </Button>
               </div>
             </CardContent>
           </Card>
