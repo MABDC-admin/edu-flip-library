@@ -34,6 +34,7 @@ export interface BookPage {
   book_id: string;
   page_number: number;
   image_url: string;
+  text_content: string | null;
   created_at: string;
 }
 
