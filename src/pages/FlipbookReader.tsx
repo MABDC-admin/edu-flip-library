@@ -262,22 +262,17 @@ export default function FlipbookReader() {
     );
   }
 
-  // HTML5 Flipbook Mode - Redirect directly to avoid iframe issues
-  useEffect(() => {
-    if (book.html5_url) {
-      window.location.href = book.html5_url;
-    }
-  }, [book.html5_url]);
-
+  // HTML5 Flipbook Mode - Redirect directly to Supabase URL
   if (book.html5_url) {
+    // Redirect immediately - no iframe needed
+    window.location.href = book.html5_url;
+
+    // Show loading while redirecting
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" />
           <p className="text-lg text-muted-foreground">Opening flipbook...</p>
-          <p className="text-sm text-muted-foreground">
-            If the flipbook doesn't open, <a href={book.html5_url} className="text-primary underline">click here</a>
-          </p>
         </div>
       </div>
     );
