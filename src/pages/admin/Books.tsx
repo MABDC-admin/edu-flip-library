@@ -127,7 +127,7 @@ export default function AdminBooks() {
           pdfUrl = pdfPath;
         }
 
-        // 2b. Process ZIP (HTML5 Flipbook) - Upload to Vercel Blob
+        // 2b. Process ZIP (HTML5 Flipbook) - Upload to Supabase
         if (zipFile) {
           const zip = new JSZip();
           const contents = await zip.loadAsync(zipFile);
@@ -135,7 +135,7 @@ export default function AdminBooks() {
           let indexHtmlPath = null;
           const uploadPromises: Promise<any>[] = [];
 
-          // Upload all files in the ZIP to Vercel Blob
+          // Upload all files in the ZIP
           for (const [relativePath, file] of Object.entries(contents.files)) {
             if (file.dir) continue;
 
@@ -145,32 +145,28 @@ export default function AdminBooks() {
               }
             }
 
-            const arrayBuffer = await file.async('arraybuffer');
-            const blob = new Blob([arrayBuffer], { type: mime.getType(relativePath) || 'application/octet-stream' });
-            const filePath = `flipbooks/${bookId}/${relativePath}`;
+            const blob = await file.async('blob');
+            const filePath = `${bookId}/${relativePath}`;
 
-            // Upload directly to Vercel Blob (requires token in env)
-            const uploadPromise = (async () => {
-              const { put } = await import('@vercel/blob');
-              const result = await put(filePath, blob, {
-                access: 'public',
-                token: import.meta.env.VITE_BLOB_READ_WRITE_TOKEN,
+            const uploadPromise = supabase.storage
+              .from('html5-uploads')
+              .upload(filePath, blob, {
+                contentType: mime.getType(relativePath) || 'application/octet-stream',
+                cacheControl: '3600',
+                upsert: true
               });
-              return result;
-            })();
 
             uploadPromises.push(uploadPromise);
           }
 
           toast({ title: `Extracting and uploading ${uploadPromises.length} files...`, description: "This might take a moment." });
-          const results = await Promise.all(uploadPromises);
+          await Promise.all(uploadPromises);
 
           if (indexHtmlPath) {
-            // Find the URL for the index.html file
-            const indexResult = results.find(r => r.url && r.url.includes('index.html'));
-            if (indexResult) {
-              html5Url = indexResult.url;
-            }
+            const { data: { publicUrl } } = supabase.storage
+              .from('html5-uploads')
+              .getPublicUrl(`${bookId}/${indexHtmlPath}`);
+            html5Url = publicUrl;
           } else {
             console.warn("No index.html found in ZIP archive.");
             toast({ title: "Warning", description: "No index.html found in ZIP. HTML5 view might not work.", variant: "destructive" });
