@@ -20,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import JSZip from 'jszip';
-import getType from 'mime';
+import mime from 'mime';
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
   gradeLevel: z.number().min(1).max(12),
@@ -151,7 +151,7 @@ export default function AdminBooks() {
             const uploadPromise = supabase.storage
               .from('html5-uploads')
               .upload(filePath, blob, {
-                contentType: getType(relativePath) || 'application/octet-stream',
+                contentType: mime.getType(relativePath) || 'application/octet-stream',
                 upsert: true
               });
 
