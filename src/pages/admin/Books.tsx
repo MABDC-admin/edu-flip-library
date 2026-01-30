@@ -146,7 +146,13 @@ export default function AdminBooks() {
             }
 
             const arrayBuffer = await file.async('arraybuffer');
-            const base64Content = Buffer.from(arrayBuffer).toString('base64');
+            // Convert to base64 using browser-compatible method
+            const bytes = new Uint8Array(arrayBuffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+              binary += String.fromCharCode(bytes[i]);
+            }
+            const base64Content = btoa(binary);
             const filePath = `flipbooks/${bookId}/${relativePath}`;
             const contentType = mime.getType(relativePath) || 'application/octet-stream';
 
