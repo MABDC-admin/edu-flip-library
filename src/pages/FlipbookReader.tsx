@@ -80,7 +80,8 @@ export default function FlipbookReader() {
   // Responsive view mode
   useEffect(() => {
     const handleResize = () => {
-      setViewMode(window.innerWidth >= 1024 ? 'double' : 'single');
+      // Allow double view on tablets (768px+) if they are wide enough
+      setViewMode(window.innerWidth >= 768 ? 'double' : 'single');
     };
     handleResize();
     window.addEventListener('resize', handleResize);
@@ -404,12 +405,34 @@ export default function FlipbookReader() {
               )}
             </div>
           ) : (
-            /* Fallback Mode */
-            <div className="bg-white p-4 rounded text-black shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
-              <Document file={book.pdf_url} className="flex gap-0" loading={<Loader2 className="animate-spin" />}>
-                <Page pageNumber={leftPageNum} height={window.innerHeight * 0.9} renderTextLayer={false} renderAnnotationLayer={false} />
+            /* Fallback Mode - Styled to match Immersive UI */
+            <div className={cn(
+              "relative flex transition-all duration-500 ease-out shadow-[0_20px_50px_rgba(0,0,0,0.5)] bg-slate-100",
+              viewMode === 'double'
+                ? "aspect-[1.414] h-auto w-[98vw] md:h-[90vh] md:w-auto rounded-sm"
+                : "aspect-[0.707] h-auto w-[98vw] md:h-[90vh] md:w-auto rounded-sm"
+            )}>
+              <Document file={book.pdf_url} className="flex w-full h-full" loading={<Loader2 className="animate-spin text-indigo-500 w-10 h-10" />}>
+                <div className={cn("flex-1 bg-white relative overflow-hidden flex items-center justify-center", viewMode === 'double' && "border-r border-slate-200")}>
+                  <Page
+                    pageNumber={leftPageNum}
+                    height={window.innerHeight * 0.9}
+                    className="max-w-full max-h-full object-contain"
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                  />
+                </div>
                 {viewMode === 'double' && rightPageNum && rightPageNum <= totalPages && (
-                  <Page pageNumber={rightPageNum} height={window.innerHeight * 0.9} renderTextLayer={false} renderAnnotationLayer={false} />
+                  <div className="flex-1 bg-white relative overflow-hidden flex items-center justify-center">
+                    <Page
+                      pageNumber={rightPageNum}
+                      height={window.innerHeight * 0.9}
+                      className="max-w-full max-h-full object-contain"
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                    />
+                    <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-black/10 to-transparent pointer-events-none mix-blend-multiply" />
+                  </div>
                 )}
               </Document>
             </div>
