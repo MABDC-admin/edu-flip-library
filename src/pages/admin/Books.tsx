@@ -453,6 +453,39 @@ export default function AdminBooks() {
                     )}
                   </div>
 
+                  <div className="space-y-2">
+                    <Label htmlFor="zip">HTML5 Flipbook (ZIP)</Label>
+                    <div className={cn(
+                      "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+                      zipFile ? "border-primary/50 bg-primary/5" : "border-slate-200 hover:border-primary/30"
+                    )}>
+                      <input
+                        id="zip"
+                        type="file"
+                        accept=".zip"
+                        onChange={(e) => setZipFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                      <label htmlFor="zip" className="cursor-pointer">
+                        <Upload className={cn("w-8 h-8 mx-auto mb-2", zipFile ? "text-primary" : "text-muted-foreground")} />
+                        {zipFile ? (
+                          <div className="space-y-1">
+                            <p className="text-sm font-medium text-primary line-clamp-1">{zipFile.name}</p>
+                            <p className="text-xs text-muted-foreground">{(zipFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium">Click to upload ZIP archive</p>
+                            <p className="text-xs text-muted-foreground">HTML5 flipbook with index.html</p>
+                          </>
+                        )}
+                      </label>
+                    </div>
+                    {errors.zip && (
+                      <p className="text-sm text-destructive">{errors.zip}</p>
+                    )}
+                  </div>
+
                   <div className="flex justify-end gap-2 pt-4">
                     <Button
                       type="button"
@@ -464,16 +497,16 @@ export default function AdminBooks() {
                     </Button>
                     <Button
                       type="submit"
-                      disabled={createBook.isPending || isUploading}
+                      disabled={createBook.isPending || isUploading || (!pdfFile && !zipFile)}
                       className="gradient-primary min-w-[120px]"
                     >
                       {createBook.isPending || isUploading ? (
                         <div className="flex flex-col gap-1 items-center w-full">
                           <div className="flex items-center gap-2">
                             <Loader2 className="w-4 h-4 animate-spin" />
-                            {pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering'
+                            {pdfFile && (pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering')
                               ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
-                              : 'Uploading...'}
+                              : (zipFile ? 'Uploading & Extracting...' : 'Uploading...')}
                           </div>
                           {pdfProgress.total > 0 && (
                             <Progress
