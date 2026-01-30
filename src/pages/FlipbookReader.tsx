@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useBook, useBookPages, useReadingProgress, useUpdateReadingProgress } from '@/hooks/useBooks';
+import { useBook, useReadingProgress, useUpdateReadingProgress } from '@/hooks/useBooks';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -15,7 +15,8 @@ import {
   LayoutGrid,
   BookCopy,
   GraduationCap,
-  CheckCircle2
+  CheckCircle2,
+  Loader2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,18 +37,36 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+// react-pdf imports
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+// Configure PDF worker
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+
+// Optimize PDF loading options
+const pdfOptions = {
+  cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+  cMapPacked: true,
+  standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+  disableRange: false, // Enable range requests (streaming)
+  disableStream: false,
+  disableAutoFetch: true, // Don't fetch the whole file automatically
+};
+
 export default function FlipbookReader() {
+
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
-  const { data: pages, isLoading: pagesLoading } = useBookPages(bookId);
   const { data: progress } = useReadingProgress(bookId);
   const updateProgress = useUpdateReadingProgress();
 
+  const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFlipping, setIsFlipping] = useState(false);
-  const [flipDirection, setFlipDirection] = useState<'next' | 'prev' | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [showThumbnails, setShowThumbnails] = useState(false);
@@ -72,12 +91,16 @@ export default function FlipbookReader() {
     }
   }, [progress]);
 
+  function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
+    setNumPages(numPages);
+  }
+
   // Save progress on page change
   const saveProgress = useCallback((page: number) => {
     if (!bookId || !book) return;
-    const completed = page >= book.page_count;
+    const completed = page >= (numPages || book.page_count || 1);
     updateProgress.mutate({ bookId, currentPage: page, completed });
-  }, [bookId, book, updateProgress]);
+  }, [bookId, book, numPages, updateProgress]);
 
   // Debounced progress save
   useEffect(() => {
@@ -87,7 +110,7 @@ export default function FlipbookReader() {
     return () => clearTimeout(timeout);
   }, [currentPage, saveProgress]);
 
-  const totalPages = pages?.length || book?.page_count || 0;
+  const totalPages = numPages || book?.page_count || 0;
 
   const playFlipSound = () => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
@@ -98,15 +121,13 @@ export default function FlipbookReader() {
   const goToPage = useCallback((page: number) => {
     if (page < 1 || page > totalPages || isFlipping) return;
 
-    const direction = page > currentPage ? 'next' : 'prev';
-    setFlipDirection(direction);
     setIsFlipping(true);
 
+    // Short timeout for animation effect
     setTimeout(() => {
       setCurrentPage(page);
       setIsFlipping(false);
-      setFlipDirection(null);
-    }, 600);
+    }, 300);
   }, [currentPage, totalPages, isFlipping]);
 
   const handlePageChange = useCallback((page: number) => {
@@ -200,11 +221,11 @@ export default function FlipbookReader() {
     touchStartX.current = null;
   };
 
-  const currentPageData = pages?.find((p) => p.page_number === currentPage);
-  const leftPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage) : currentPageData;
-  const rightPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage + 1) : null;
+  // Determine which page numbers to show
+  const leftPageNum = viewMode === 'double' ? currentPage : currentPage;
+  const rightPageNum = viewMode === 'double' ? currentPage + 1 : null;
 
-  if (bookLoading || pagesLoading) {
+  if (bookLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="space-y-4 text-center">
@@ -215,11 +236,11 @@ export default function FlipbookReader() {
     );
   }
 
-  if (!book) {
+  if (!book || !book.pdf_url) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
-          <p className="text-lg text-muted-foreground">Book not found</p>
+          <p className="text-lg text-muted-foreground">Book or PDF source not found</p>
           <Button onClick={() => navigate('/bookshelf')}>Back to Bookshelf</Button>
         </div>
       </div>
@@ -254,6 +275,7 @@ export default function FlipbookReader() {
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
+          {/* Thumbnails Sheet - Simplified to just a list for now, or could implement PDF thumbnails later */}
           <Sheet open={showThumbnails} onOpenChange={setShowThumbnails}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
@@ -264,33 +286,24 @@ export default function FlipbookReader() {
               <SheetHeader>
                 <SheetTitle className="text-white flex items-center gap-2">
                   <LayoutGrid className="w-4 h-4" />
-                  Thumbnail Gallery
+                  Jump to Page
                 </SheetTitle>
               </SheetHeader>
               <ScrollArea className="h-full mt-4 pb-8">
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 px-2">
-                  {pages?.map((p) => (
+                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-4 px-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                     <button
-                      key={p.id}
+                      key={p}
                       onClick={() => {
-                        handlePageChange(p.page_number);
+                        handlePageChange(p);
                         setShowThumbnails(false);
                       }}
                       className={cn(
-                        "relative group aspect-[3/4] rounded-md overflow-hidden ring-2 ring-transparent transition-all",
-                        currentPage === p.page_number ? "ring-primary" : "hover:ring-white/30"
+                        "p-4 rounded-md bg-slate-800 hover:bg-slate-700 transition-colors text-center",
+                        currentPage === p ? "ring-2 ring-primary" : ""
                       )}
                     >
-                      {p.image_url ? (
-                        <img src={p.image_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-slate-800 flex items-center justify-center text-xs">
-                          {p.page_number}
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <span className="text-xs font-bold">{p.page_number}</span>
-                      </div>
+                      <span className="text-sm font-bold">Page {p}</span>
                     </button>
                   ))}
                 </div>
@@ -361,6 +374,18 @@ export default function FlipbookReader() {
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
+        {/* Helper to load the document once */}
+        <div className="hidden">
+          <Document
+            file={book.pdf_url}
+            onLoadSuccess={onDocumentLoadSuccess}
+            loading={<div />} // silent loading
+            error={<div>Error loading PDF</div>}
+          >
+            {/* We just want the metadata here to set numPages */}
+          </Document>
+        </div>
+
         {/* Navigation arrows overlay */}
         <div
           onClick={handlePrev}
@@ -391,81 +416,64 @@ export default function FlipbookReader() {
           className="relative perspective-[2000px] transition-transform duration-300"
           style={{ transform: `scale(${zoom})` }}
         >
-          {/* Book wrapper for 3D effect */}
-          <div className={cn(
-            "relative flex transition-all duration-700 ease-out",
-            viewMode === 'double' ? "w-[600px] sm:w-[800px] md:w-[900px] lg:w-[1000px] xl:w-[1100px]" : "w-[300px] sm:w-[400px] md:w-[500px] lg:w-[550px]"
-          )}>
-            {/* Left Page (or Single Page) */}
-            <div
-              className={cn(
-                "aspect-[3/4] flex-1 rounded-l-lg overflow-hidden shadow-2xl bg-white relative",
-                "transform-style-preserve-3d transition-all duration-600",
-                viewMode === 'single' ? "rounded-r-lg" : "border-r border-slate-200",
-                isFlipping && flipDirection === 'prev' && "animate-page-flip origin-right"
-              )}
-            >
-              {leftPageData?.image_url ? (
-                <img
-                  src={leftPageData.image_url}
-                  alt={`Page ${leftPageData.page_number}`}
-                  className="w-full h-full object-contain bg-white"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-                  <div className="text-center p-8">
-                    <p className="text-6xl font-display font-bold text-primary/30">
-                      {currentPage}
-                    </p>
-                    <p className="text-muted-foreground mt-2 font-display">Page {currentPage}</p>
-                  </div>
-                </div>
-              )}
-              {/* Inner Shadow for fold */}
-              {viewMode === 'double' && (
-                <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black/20 to-transparent pointer-events-none" />
-              )}
-            </div>
-
-            {/* Right Page (Double View Only) */}
-            {viewMode === 'double' && (
+          {/* React PDF Document Context */}
+          <Document
+            file={book.pdf_url}
+            options={pdfOptions}
+            className="flex justify-center items-center"
+            loading={
+              <div className="flex items-center text-white gap-2">
+                <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                <span className="font-display text-lg">Loading Book...</span>
+              </div>
+            }
+          >
+            <div className={cn(
+              "relative flex transition-all duration-700 ease-out shadow-2xl rounded-lg overflow-hidden bg-white",
+              viewMode === 'double' ? "w-[600px] sm:w-[800px] md:w-[900px] lg:w-[1000px] xl:w-[1100px]" : "w-[300px] sm:w-[400px] md:w-[500px] lg:w-[550px]"
+            )}>
+              {/* Page 1 (Left or Single) */}
               <div
                 className={cn(
-                  "aspect-[3/4] flex-1 rounded-r-lg overflow-hidden shadow-2xl bg-white relative translate-z-[-1px]",
-                  "transform-style-preserve-3d transition-all duration-600",
-                  isFlipping && flipDirection === 'next' && "animate-page-flip origin-left"
+                  "flex-1 relative bg-white flex items-center justify-center overflow-hidden",
+                  viewMode === 'double' && "border-r border-slate-200"
                 )}
               >
-                {rightPageData?.image_url ? (
-                  <img
-                    src={rightPageData.image_url}
-                    alt={`Page ${rightPageData.page_number}`}
-                    className="w-full h-full object-contain bg-white"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-white border-l border-slate-100">
-                    {rightPageData ? (
-                      <div className="text-center p-8">
-                        <p className="text-6xl font-display font-bold text-primary/30">
-                          {rightPageData.page_number}
-                        </p>
-                        <p className="text-muted-foreground mt-2 font-display">Page {rightPageData.page_number}</p>
-                      </div>
-                    ) : (
-                      <div className="w-full h-full bg-slate-50 flex items-center justify-center">
-                        <p className="text-slate-300 font-display italic">End of book</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Inner Shadow for fold */}
-                <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none" />
-              </div>
-            )}
+                <Page
+                  key={`page_${leftPageNum}`}
+                  pageNumber={leftPageNum}
+                  className="w-full h-full object-contain"
+                  width={viewMode === 'double' ? 550 : 550} // Approximate width to force scaling
+                  renderTextLayer={false}
+                  renderAnnotationLayer={false}
+                />
 
-            {/* Book spine/depth effect */}
-            <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-black/10 -translate-x-1/2 z-10" />
-          </div>
+                {/* Page Number Indicator */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono">
+                  {leftPageNum}
+                </div>
+              </div>
+
+              {/* Page 2 (Right - Double Mode Only) */}
+              {viewMode === 'double' && rightPageNum && rightPageNum <= totalPages && (
+                <div className="flex-1 relative bg-white flex items-center justify-center overflow-hidden">
+                  <Page
+                    key={`page_${rightPageNum}`}
+                    pageNumber={rightPageNum}
+                    className="w-full h-full object-contain"
+                    width={550}
+                    renderTextLayer={false}
+                    renderAnnotationLayer={false}
+                  />
+                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono">
+                    {rightPageNum}
+                  </div>
+                  {/* Shadow for fold */}
+                  <div className="absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-black/20 to-transparent pointer-events-none" />
+                </div>
+              )}
+            </div>
+          </Document>
         </div>
 
         {/* Zoom controls */}
@@ -506,13 +514,13 @@ export default function FlipbookReader() {
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex items-center gap-6 text-white">
             <span className="text-sm font-display font-medium min-w-[70px] bg-white/10 px-3 py-1 rounded-full">
-              Page {currentPage} {viewMode === 'double' && rightPageData && `- ${rightPageData.page_number}`}
+              Page {currentPage} {viewMode === 'double' && rightPageNum && rightPageNum <= totalPages && `- ${rightPageNum}`}
             </span>
 
             <Slider
               value={[currentPage]}
               min={1}
-              max={totalPages}
+              max={totalPages || 1}
               step={1}
               onValueChange={([value]) => handlePageChange(value)}
               className="flex-1"
@@ -527,12 +535,13 @@ export default function FlipbookReader() {
           <div className="flex justify-between items-center text-xs text-white/40 uppercase tracking-widest font-display">
             <span>EduFlip Library</span>
             <span className="bg-white/5 px-2 py-0.5 rounded">
-              {Math.round((currentPage / totalPages) * 100)}% complete
+              {Math.round((currentPage / (totalPages || 1)) * 100)}% complete
             </span>
-            <span>Interactive Reader</span>
+            <span>Interactive PDF Reader</span>
           </div>
         </div>
       </footer>
     </div>
   );
 }
+
