@@ -1,1 +1,4 @@
 project_id = "kpzpuiiagtwajyrfmuzl"
+
+[functions.process-book]
+verify_jwt = false
