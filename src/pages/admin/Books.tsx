@@ -284,13 +284,18 @@ export default function AdminBooks() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!pdfFile) {
-      setErrors({ pdf: 'PDF file is required' });
+    if (!pdfFile && !zipFile) {
+      setErrors({ pdf: 'Please upload either a PDF or a ZIP file.' });
       return;
     }
 
-    if (pdfFile.size > MAX_FILE_SIZE) {
+    if (pdfFile && pdfFile.size > MAX_FILE_SIZE) {
       setErrors({ pdf: `PDF is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
+      return;
+    }
+
+    if (zipFile && zipFile.size > MAX_FILE_SIZE) {
+      setErrors({ zip: `ZIP is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
       return;
     }
 
