@@ -281,479 +281,443 @@ export default function AdminBooks() {
     },
   });
 
-  // 6. Mark book as ready
-  const { error: finalUpdateError } = await supabase
-    .from('books')
-    .update({
-      page_count: pageCount,
-      status: 'ready',
-    })
-    .eq('id', bookId);
 
-  if (finalUpdateError) throw finalUpdateError;
 
-  toast({ title: 'Book uploaded & processed! 🚀' });
-
-  return book;
-} finally {
-  setIsUploading(false);
-}
-},
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ['admin-books'] });
-  setIsDialogOpen(false);
-  resetForm();
-  resetPdfProgress();
-  toast({
-    title: 'Book uploaded! 📚',
-    description: 'All pages have been processed.',
-  });
-},
-  onError: (error) => {
-    resetPdfProgress();
-    toast({
-      title: 'Upload failed',
-      description: error.message,
-      variant: 'destructive',
-    });
-  },
-  });
-
-const resetForm = () => {
-  setTitle('');
-  setGradeLevel(1);
-  setPdfFile(null);
-  setCoverFile(null);
-  setErrors({});
-};
-
-const deleteBook = useMutation({
-  mutationFn: async (bookId: string) => {
-    // 1. Delete record (cascade should handle files if configured, but let's be safe)
-    const { error } = await supabase
-      .from('books')
-      .delete()
-      .eq('id', bookId);
-
-    if (error) throw error;
-
-    // 2. Cleanup storage (Optional but recommended)
-    await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]).catch(console.error);
-    await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
-  },
-  onSuccess: () => {
-    queryClient.invalidateQueries({ queryKey: ['admin-books'] });
-    toast({
-      title: 'Book deleted',
-      description: 'The book and its files have been removed.',
-    });
-  },
-  onError: (error) => {
-    toast({
-      title: 'Error',
-      description: error.message,
-      variant: 'destructive',
-    });
-  },
-});
-
-const handleSubmit = (e: React.FormEvent) => {
-  e.preventDefault();
-
-  if (!pdfFile) {
-    setErrors({ pdf: 'PDF file is required' });
-    return;
-  }
-
-  if (pdfFile.size > MAX_FILE_SIZE) {
-    setErrors({ pdf: `PDF is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
-    return;
-  }
-
-  try {
-    formSchema.parse({ title, gradeLevel });
+  const resetForm = () => {
+    setTitle('');
+    setGradeLevel(1);
+    setPdfFile(null);
+    setCoverFile(null);
     setErrors({});
-    createBook.mutate({ title, gradeLevel, pdfFile, coverFile });
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      const newErrors: Record<string, string> = {};
-      error.errors.forEach((err) => {
-        if (err.path[0]) {
-          newErrors[err.path[0] as string] = err.message;
-        }
+  };
+
+  const deleteBook = useMutation({
+    mutationFn: async (bookId: string) => {
+      // 1. Delete record (cascade should handle files if configured, but let's be safe)
+      const { error } = await supabase
+        .from('books')
+        .delete()
+        .eq('id', bookId);
+
+      if (error) throw error;
+
+      // 2. Cleanup storage (Optional but recommended)
+      await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]).catch(console.error);
+      await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+      toast({
+        title: 'Book deleted',
+        description: 'The book and its files have been removed.',
       });
-      setErrors(newErrors);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!pdfFile) {
+      setErrors({ pdf: 'PDF file is required' });
+      return;
     }
-  }
-};
 
-const getStatusBadge = (status: string) => {
-  switch (status) {
-    case 'ready':
-      return <Badge className="bg-success/10 text-success border-success/20">Ready</Badge>;
-    case 'processing':
-      return <Badge className="bg-warning/10 text-warning border-warning/20">Processing</Badge>;
-    case 'error':
-      return <Badge className="bg-destructive/10 text-destructive border-destructive/20">Error</Badge>;
-    default:
-      return <Badge variant="secondary">{status}</Badge>;
-  }
-};
+    if (pdfFile.size > MAX_FILE_SIZE) {
+      setErrors({ pdf: `PDF is too large. Max size is ${MAX_FILE_SIZE / 1024 / 1024}MB.` });
+      return;
+    }
 
-return (
-  <AdminLayout title="Books">
-    <div className="space-y-6">
-      {/* Actions bar */}
-      <div className="flex flex-col sm:flex-row justify-between gap-4">
-        <div className="flex flex-1 gap-2 max-w-2xl">
-          <div className="relative flex-1">
-            <Input
-              placeholder="Search books..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-            <BookOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          </div>
+    try {
+      formSchema.parse({ title, gradeLevel });
+      setErrors({});
+      createBook.mutate({ title, gradeLevel, pdfFile, coverFile });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {};
+        error.errors.forEach((err) => {
+          if (err.path[0]) {
+            newErrors[err.path[0] as string] = err.message;
+          }
+        });
+        setErrors(newErrors);
+      }
+    }
+  };
 
-          <Select value={filterGrade} onValueChange={setFilterGrade}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All Grades" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Grades</SelectItem>
-              {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'ready':
+        return <Badge className="bg-success/10 text-success border-success/20">Ready</Badge>;
+      case 'processing':
+        return <Badge className="bg-warning/10 text-warning border-warning/20">Processing</Badge>;
+      case 'error':
+        return <Badge className="bg-destructive/10 text-destructive border-destructive/20">Error</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
 
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="gradient-primary" onClick={resetForm}>
-                <Plus className="w-4 h-4 mr-2" />
-                Add Book
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-              <DialogHeader>
-                <DialogTitle>Add New Book</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Book Title</Label>
-                  <Input
-                    id="title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Enter book title"
-                    className={errors.title ? 'border-destructive' : ''}
-                  />
-                  {errors.title && (
-                    <p className="text-sm text-destructive">{errors.title}</p>
-                  )}
-                </div>
+  return (
+    <AdminLayout title="Books">
+      <div className="space-y-6">
+        {/* Actions bar */}
+        <div className="flex flex-col sm:flex-row justify-between gap-4">
+          <div className="flex flex-1 gap-2 max-w-2xl">
+            <div className="relative flex-1">
+              <Input
+                placeholder="Search books..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+              />
+              <BookOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
+            <Select value={filterGrade} onValueChange={setFilterGrade}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Grades</SelectItem>
+                {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="gradient-primary" onClick={resetForm}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Book
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                  <DialogTitle>Add New Book</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                   <div className="space-y-2">
-                    <Label htmlFor="grade">Grade Level</Label>
-                    <Select
-                      value={gradeLevel.toString()}
-                      onValueChange={(value) => setGradeLevel(parseInt(value))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Label htmlFor="title">Book Title</Label>
+                    <Input
+                      id="title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Enter book title"
+                      className={errors.title ? 'border-destructive' : ''}
+                    />
+                    {errors.title && (
+                      <p className="text-sm text-destructive">{errors.title}</p>
+                    )}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="cover">Cover Image (Optional)</Label>
-                    <div className="relative">
-                      <Input
-                        id="cover"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-                        className="text-xs"
-                      />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="grade">Grade Level</Label>
+                      <Select
+                        value={gradeLevel.toString()}
+                        onValueChange={(value) => setGradeLevel(parseInt(value))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                              {label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="cover">Cover Image (Optional)</Label>
+                      <div className="relative">
+                        <Input
+                          id="cover"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                          className="text-xs"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="pdf-upload">PDF File (Optional if ZIP provided)</Label>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      id="pdf-upload"
-                      type="file"
-                      accept=".pdf"
-                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                    <Label
-                      htmlFor="pdf-upload"
-                      className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {pdfFile ? pdfFile.name : 'Choose PDF'}
-                    </Label>
-                  </div>
-                  {errors.pdf && (
-                    <p className="text-sm text-destructive">{errors.pdf}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="zip-upload">HTML5 Flipbook (ZIP) (Optional)</Label>
-                  <div className="flex items-center gap-4">
-                    <Input
-                      id="zip-upload"
-                      type="file"
-                      accept=".zip"
-                      onChange={(e) => setZipFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                    <Label
-                      htmlFor="zip-upload"
-                      className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {zipFile ? zipFile.name : 'Choose ZIP archive'}
-                    </Label>
-                  </div>
-                  {errors.zip && (
-                    <p className="text-sm text-destructive">{errors.zip}</p>
-                  )}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsDialogOpen(false)}
-                    disabled={isUploading}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={createBook.isPending || isUploading || (!pdfFile && !zipFile)} // Updated disabled condition
-                    className="gradient-primary min-w-[120px]"
-                  >
-                    {createBook.isPending || isUploading ? (
-                      <div className="flex flex-col gap-1 items-center w-full">
-                        <div className="flex items-center gap-2">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          {pdfFile && (pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering')
-                            ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
-                            : (zipFile ? 'Uploading & Extracting...' : 'Uploading...')}
-                        </div>
-                        {pdfFile && pdfProgress.total > 0 && (
-                          <Progress
-                            value={(pdfProgress.done / pdfProgress.total) * 100}
-                            className="h-2 w-full"
-                          />
-                        )}
-                      </div>
-                    ) : (
-                      'Upload & Create'
+                  <div className="space-y-2">
+                    <Label htmlFor="pdf-upload">PDF File (Optional if ZIP provided)</Label>
+                    <div className="flex items-center gap-4">
+                      <Input
+                        id="pdf-upload"
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                      <Label
+                        htmlFor="pdf-upload"
+                        className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        <Upload className="w-4 h-4" />
+                        {pdfFile ? pdfFile.name : 'Choose PDF'}
+                      </Label>
+                    </div>
+                    {errors.pdf && (
+                      <p className="text-sm text-destructive">{errors.pdf}</p>
                     )}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="zip-upload">HTML5 Flipbook (ZIP) (Optional)</Label>
+                    <div className="flex items-center gap-4">
+                      <Input
+                        id="zip-upload"
+                        type="file"
+                        accept=".zip"
+                        onChange={(e) => setZipFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                      />
+                      <Label
+                        htmlFor="zip-upload"
+                        className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors"
+                      >
+                        <Upload className="w-4 h-4" />
+                        {zipFile ? zipFile.name : 'Choose ZIP archive'}
+                      </Label>
+                    </div>
+                    {errors.zip && (
+                      <p className="text-sm text-destructive">{errors.zip}</p>
+                    )}
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                      disabled={isUploading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={createBook.isPending || isUploading || (!pdfFile && !zipFile)} // Updated disabled condition
+                      className="gradient-primary min-w-[120px]"
+                    >
+                      {createBook.isPending || isUploading ? (
+                        <div className="flex flex-col gap-1 items-center w-full">
+                          <div className="flex items-center gap-2">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            {pdfFile && (pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering')
+                              ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
+                              : (zipFile ? 'Uploading & Extracting...' : 'Uploading...')}
+                          </div>
+                          {pdfFile && pdfProgress.total > 0 && (
+                            <Progress
+                              value={(pdfProgress.done / pdfProgress.total) * 100}
+                              className="h-2 w-full"
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        'Upload & Create'
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            {books?.length || 0} books in library
+          </p>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          {books?.length || 0} books in library
-        </p>
-      </div>
-
-      {/* Books table */}
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-6 space-y-4">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12" />
-              ))}
-            </div>
-          ) : books && books.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Grade</TableHead>
-                  <TableHead>Pages</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredBooks?.map((book) => (
-                  <TableRow key={book.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-                          <BookOpen className="w-4 h-4 text-primary" />
-                        </div>
-                        {book.title}
-                      </div>
-                    </TableCell>
-                    <TableCell>{GRADE_LABELS[book.grade_level] || 'N/A'}</TableCell>
-                    <TableCell>{book.page_count}</TableCell>
-                    <TableCell>{getStatusBadge(book.status)}</TableCell>
-                    <TableCell className="text-muted-foreground text-xs">
-                      {new Date(book.created_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            setEditingBook(book);
-                            setTitle(book.title);
-                            setGradeLevel(book.grade_level);
-                            setIsEditOpen(true);
-                          }}
-                          title="Edit Book"
-                          className="text-accent hover:bg-accent/10"
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => navigate(`/read/${book.id}`)}
-                          title="View Flipbook"
-                          className="text-primary hover:bg-primary/10"
-                        >
-                          <BookOpen className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteBook.mutate(book.id)}
-                          disabled={deleteBook.isPending}
-                          title="Delete Book"
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+        {/* Books table */}
+        <Card>
+          <CardContent className="p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12" />
                 ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="p-12 text-center">
-              <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No books found</h3>
-              <p className="text-muted-foreground mb-4">
-                {searchQuery || filterGrade !== 'all'
-                  ? "Try adjusting your filters to find what you're looking for"
-                  : "Start by adding your first book to the library"}
-              </p>
-              {!searchQuery && filterGrade === 'all' && (
-                <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Your First Book
-                </Button>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Edit Dialog */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Edit Book Details</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-title">Title</Label>
-              <Input
-                id="edit-title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-grade">Grade Level</Label>
-              <Select
-                value={gradeLevel.toString()}
-                onValueChange={(value) => setGradeLevel(parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
+              </div>
+            ) : books && books.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Grade</TableHead>
+                    <TableHead>Pages</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredBooks?.map((book) => (
+                    <TableRow key={book.id}>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+                            <BookOpen className="w-4 h-4 text-primary" />
+                          </div>
+                          {book.title}
+                        </div>
+                      </TableCell>
+                      <TableCell>{GRADE_LABELS[book.grade_level] || 'N/A'}</TableCell>
+                      <TableCell>{book.page_count}</TableCell>
+                      <TableCell>{getStatusBadge(book.status)}</TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {new Date(book.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => {
+                              setEditingBook(book);
+                              setTitle(book.title);
+                              setGradeLevel(book.grade_level);
+                              setIsEditOpen(true);
+                            }}
+                            title="Edit Book"
+                            className="text-accent hover:bg-accent/10"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => navigate(`/read/${book.id}`)}
+                            title="View Flipbook"
+                            className="text-primary hover:bg-primary/10"
+                          >
+                            <BookOpen className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => deleteBook.mutate(book.id)}
+                            disabled={deleteBook.isPending}
+                            title="Delete Book"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-zip-upload">Update HTML5 Flipbook (ZIP)</Label>
-              <div className="flex items-center gap-4">
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="p-12 text-center">
+                <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No books found</h3>
+                <p className="text-muted-foreground mb-4">
+                  {searchQuery || filterGrade !== 'all'
+                    ? "Try adjusting your filters to find what you're looking for"
+                    : "Start by adding your first book to the library"}
+                </p>
+                {!searchQuery && filterGrade === 'all' && (
+                  <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Book
+                  </Button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Book Details</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-title">Title</Label>
                 <Input
-                  id="edit-zip-upload"
-                  type="file"
-                  accept=".zip"
-                  onChange={(e) => setZipFile(e.target.files?.[0] || null)}
-                  className="hidden"
+                  id="edit-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                 />
-                <Label
-                  htmlFor="edit-zip-upload"
-                  className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors"
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-grade">Grade Level</Label>
+                <Select
+                  value={gradeLevel.toString()}
+                  onValueChange={(value) => setGradeLevel(parseInt(value))}
                 >
-                  <Upload className="w-4 h-4" />
-                  {zipFile ? zipFile.name : 'Choose New ZIP'}
-                </Label>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-zip-upload">Update HTML5 Flipbook (ZIP)</Label>
+                <div className="flex items-center gap-4">
+                  <Input
+                    id="edit-zip-upload"
+                    type="file"
+                    accept=".zip"
+                    onChange={(e) => setZipFile(e.target.files?.[0] || null)}
+                    className="hidden"
+                  />
+                  <Label
+                    htmlFor="edit-zip-upload"
+                    className="flex items-center gap-2 px-4 py-2 border rounded-md cursor-pointer hover:bg-slate-50 transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {zipFile ? zipFile.name : 'Choose New ZIP'}
+                  </Label>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                <Button
+                  className="gradient-primary"
+                  onClick={() => {
+                    if (editingBook) {
+                      updateBook.mutate({
+                        id: editingBook.id,
+                        title,
+                        gradeLevel,
+                        zipFile: zipFile
+                      });
+                    }
+                  }}
+                  disabled={updateBook.isPending}
+                >
+                  {updateBook.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save Changes'}
+                </Button>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-              <Button
-                className="gradient-primary"
-                onClick={() => {
-                  if (editingBook) {
-                    updateBook.mutate({
-                      id: editingBook.id,
-                      title,
-                      gradeLevel,
-                      zipFile: zipFile
-                    });
-                  }
-                }}
-                disabled={updateBook.isPending}
-              >
-                {updateBook.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : 'Save Changes'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  </AdminLayout>
-);
+          </DialogContent>
+        </Dialog>
+      </div>
+    </AdminLayout>
+  );
 }
