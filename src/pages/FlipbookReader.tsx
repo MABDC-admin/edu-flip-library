@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBook, useBookPages, useReadingProgress, useUpdateReadingProgress } from '@/hooks/useBooks';
+import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import {
@@ -59,6 +60,7 @@ export default function FlipbookReader() {
 
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
   const { data: pages } = useBookPages(bookId);
