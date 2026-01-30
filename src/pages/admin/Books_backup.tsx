@@ -19,8 +19,6 @@ import { GRADE_LABELS, Book } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
-import JSZip from 'jszip';
-import getType from 'mime';
 const formSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255, 'Title is too long'),
   gradeLevel: z.number().min(1).max(12),
@@ -90,12 +88,9 @@ export default function AdminBooks() {
   const { progress: pdfProgress, processInBrowser, reset: resetPdfProgress } = usePdfToImages();
 
   const createBook = useMutation({
-    mutationFn: async ({ title, gradeLevel, pdfFile, zipFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File | null; zipFile: File | null; coverFile: File | null }) => {
+    mutationFn: async ({ title, gradeLevel, pdfFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File; coverFile: File | null }) => {
       setIsUploading(true);
       try {
-        if (!pdfFile && !zipFile) {
-          throw new Error('Please upload either a PDF or a ZIP file.');
-        }
         // 1. Create book record first to get ID
         const { data: book, error: bookError } = await supabase
           .from('books')
@@ -112,64 +107,16 @@ export default function AdminBooks() {
 
         const bookId = book.id;
         let pdfUrl = null;
-        let html5Url = null;
         let coverUrl = null;
 
-        // 2a. Upload PDF (if provided)
-        if (pdfFile) {
-          const pdfPath = `${bookId}/source.pdf`;
-          const { error: pdfUploadError } = await supabase.storage
-            .from('pdf-uploads')
-            .upload(pdfPath, pdfFile);
+        // 2. Upload PDF
+        const pdfPath = `${bookId}/source.pdf`;
+        const { error: pdfUploadError } = await supabase.storage
+          .from('pdf-uploads')
+          .upload(pdfPath, pdfFile);
 
-          if (pdfUploadError) throw pdfUploadError;
-          pdfUrl = pdfPath;
-        }
-
-        // 2b. Process ZIP (HTML5 Flipbook)
-        if (zipFile) {
-          const zip = new JSZip();
-          const contents = await zip.loadAsync(zipFile);
-
-          let indexHtmlPath = null;
-          const uploadPromises: Promise<any>[] = [];
-
-          // Upload all files in the ZIP
-          for (const [relativePath, file] of Object.entries(contents.files)) {
-            if (file.dir) continue;
-
-            if (relativePath.endsWith('index.html') || relativePath.endsWith('index.htm')) {
-              if (!indexHtmlPath || relativePath.length < indexHtmlPath.length) {
-                indexHtmlPath = relativePath;
-              }
-            }
-
-            const blob = await file.async('blob');
-            const filePath = `${bookId}/${relativePath}`;
-
-            const uploadPromise = supabase.storage
-              .from('html5-uploads')
-              .upload(filePath, blob, {
-                contentType: getType(relativePath) || 'application/octet-stream',
-                upsert: true
-              });
-
-            uploadPromises.push(uploadPromise);
-          }
-
-          toast({ title: `Extracting and uploading ${uploadPromises.length} files...`, description: "This might take a moment." });
-          await Promise.all(uploadPromises);
-
-          if (indexHtmlPath) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('html5-uploads')
-              .getPublicUrl(`${bookId}/${indexHtmlPath}`);
-            html5Url = publicUrl;
-          } else {
-            console.warn("No index.html found in ZIP archive.");
-            toast({ title: "Warning", description: "No index.html found in ZIP. HTML5 view might not work.", variant: "destructive" });
-          }
-        }
+        if (pdfUploadError) throw pdfUploadError;
+        pdfUrl = pdfPath;
 
         // 3. Upload Cover (if provided)
         if (coverFile) {
@@ -192,31 +139,27 @@ export default function AdminBooks() {
           .from('books')
           .update({
             pdf_url: pdfUrl,
-            html5_url: html5Url,
             cover_url: coverUrl,
-            status: pdfFile ? 'processing' : 'ready',
           })
           .eq('id', bookId);
 
         if (updateError) throw updateError;
 
-        // 5. Render pages in-browser using Canvas + upload to storage (if PDF)
-        if (pdfFile) {
-          const pageCount = await processInBrowser(bookId, pdfFile);
+        // 5. Render pages in-browser using Canvas + upload to storage
+        const pageCount = await processInBrowser(bookId, pdfFile);
 
-          // 6. Mark book as ready
-          const { error: finalUpdateError } = await supabase
-            .from('books')
-            .update({
-              page_count: pageCount,
-              status: 'ready',
-            })
-            .eq('id', bookId);
+        // 6. Mark book as ready
+        const { error: finalUpdateError } = await supabase
+          .from('books')
+          .update({
+            page_count: pageCount,
+            status: 'ready',
+          })
+          .eq('id', bookId);
 
-          if (finalUpdateError) throw finalUpdateError;
+        if (finalUpdateError) throw finalUpdateError;
 
-          toast({ title: 'Book uploaded & processed! 🚀' });
-        }
+        toast({ title: 'Book uploaded & processed! ≡ƒÜÇ' });
 
         return book;
       } finally {
@@ -297,7 +240,7 @@ export default function AdminBooks() {
     try {
       formSchema.parse({ title, gradeLevel });
       setErrors({});
-      createBook.mutate({ title, gradeLevel, pdfFile, zipFile, coverFile });
+      createBook.mutate({ title, gradeLevel, pdfFile, coverFile });
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Record<string, string> = {};
