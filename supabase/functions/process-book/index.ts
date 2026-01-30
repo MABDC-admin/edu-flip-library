@@ -1,8 +1,17 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
 import * as pdfjs from "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs";
 
-// Set up worker
-pdfjs.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.mjs";
+// deno-lint-ignore-file no-explicit-any
+
+// Deno type declarations for OffscreenCanvas (Web API available in Deno)
+declare const OffscreenCanvas: {
+  new (width: number, height: number): {
+    width: number;
+    height: number;
+    getContext(contextId: "2d"): any;
+    convertToBlob(options?: { type?: string; quality?: number }): Promise<Blob>;
+  };
+};
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,7 +55,13 @@ Deno.serve(async (req) => {
     const pdfDocument = await loadingTask.promise;
     const pageCount = pdfDocument.numPages;
 
-    console.log(`PDF has ${pageCount} pages. Converting to images...`);
+    console.log(`PDF has ${pageCount} pages`);
+
+    // Delete existing pages for this book (in case of reprocessing)
+    await supabaseAdmin
+      .from("book_pages")
+      .delete()
+      .eq("book_id", bookId);
 
     // Process each page
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
@@ -55,7 +70,7 @@ Deno.serve(async (req) => {
         const viewport = page.getViewport({ scale: 1.5 });
 
         // Setup offscreen canvas
-        const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+        const canvas = new OffscreenCanvas(Math.floor(viewport.width), Math.floor(viewport.height));
         const ctx = canvas.getContext("2d");
 
         if (!ctx) throw new Error("Could not get 2D context");
@@ -86,9 +101,13 @@ Deno.serve(async (req) => {
           image_url: publicUrl,
         });
 
+        if (pageNum % 10 === 0) {
+          console.log(`Processed ${pageNum}/${pageCount} pages`);
+        }
+
       } catch (pageError) {
         console.error(`Error processing page ${pageNum}:`, pageError);
-        // Continue to next page? Or fail? Let's log and continue for resilience
+        // Continue to next page for resilience
       }
     }
 
@@ -101,25 +120,19 @@ Deno.serve(async (req) => {
       })
       .eq("id", bookId);
 
+    console.log(`Book ${bookId} processed successfully with ${pageCount} pages`);
+
     return new Response(
       JSON.stringify({ success: true, pageCount, bookId }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
-  } catch (error) {
+  } catch (err) {
+    const error = err as Error;
     console.error("Process error:", error);
 
-    // Try to update status to error if possible
-    try {
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
-      // Assuming we have bookId in scope? messy in catch block.
-      // We will just return error response.
-    } catch { }
-
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
