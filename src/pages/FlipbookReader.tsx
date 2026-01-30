@@ -61,7 +61,7 @@ export default function FlipbookReader() {
   const navigate = useNavigate();
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
-  const { data: pages, isLoading: pagesLoading } = useBookPages(bookId);
+  const { data: pages } = useBookPages(bookId);
   const { data: progress } = useReadingProgress(bookId);
   const updateProgress = useUpdateReadingProgress();
 
@@ -219,31 +219,17 @@ export default function FlipbookReader() {
       }
     }
 
-    const handleTouchEnd = (e: React.TouchEvent) => {
-      if (touchStartX.current === null) return;
+    touchStartX.current = null;
+  };
 
-      const touchEndX = e.changedTouches[0].clientX;
-      const diff = touchStartX.current - touchEndX;
+  // Determine page data for image-based rendering
+  const currentPageData = pages?.find((p) => p.page_number === currentPage);
+  const leftPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage) : currentPageData;
+  const rightPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage + 1) : null;
 
-      if (Math.abs(diff) > 50) {
-        if (diff > 0) {
-          handleNext();
-        } else {
-          handlePrev();
-        }
-      }
-
-      touchStartX.current = null;
-    };
-
-    // Determine page data for image-based rendering
-    const currentPageData = pages?.find((p) => p.page_number === currentPage);
-    const leftPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage) : currentPageData;
-    const rightPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage + 1) : null;
-
-    // Determine which page numbers to show (for PDF rendering)
-    const leftPageNum = viewMode === 'double' ? currentPage : currentPage;
-    const rightPageNum = viewMode === 'double' ? currentPage + 1 : null;
+  // Determine which page numbers to show (for PDF rendering)
+  const leftPageNum = viewMode === 'double' ? currentPage : currentPage;
+  const rightPageNum = viewMode === 'double' ? currentPage + 1 : null;
 
     if (bookLoading) {
       return (
