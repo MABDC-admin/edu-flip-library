@@ -1,131 +1,127 @@
 
+# Implementation Plan: PDF Page Image Generation for Flipbook
 
-# Implementation Plan: `process-book` Edge Function
+## Problem Summary
 
-## Overview
-Create a Supabase Edge Function that processes uploaded PDFs by counting their pages and updating the book record status from "processing" to "ready".
+The flipbook viewer shows blank pages because:
+1. The current `process-book` function only counts pages - it does NOT render PDF pages to images
+2. The `book_pages` table is empty (0 records)
+3. The `book-pages` storage bucket is private (images won't be accessible)
 
 ---
 
-## Architecture Flow
+## Solution Architecture
 
 ```text
-Frontend (Admin Books)          Edge Function                   Supabase
-       |                             |                              |
-       |-- POST /process-book ------>|                              |
-       |   { bookId, pdfPath }       |                              |
-       |                             |-- Download PDF ------------->|
-       |                             |   (pdf-uploads bucket)       |
-       |                             |<-- PDF binary data ---------|
-       |                             |                              |
-       |                             |-- Parse with pdf-lib        |
-       |                             |   (count pages)              |
-       |                             |                              |
-       |                             |-- UPDATE books ------------->|
-       |                             |   page_count, status='ready' |
-       |                             |<-- Success -----------------|
-       |<-- { success, pageCount } --|                              |
+PDF Processing Flow (Enhanced)
+
+Admin Uploads PDF
+       ↓
+process-book Edge Function
+       ↓
+┌──────────────────────────────────────────────────────────┐
+│  1. Download PDF from pdf-uploads bucket                 │
+│  2. For each page:                                       │
+│     a. Render page to PNG image using pdf.js             │
+│     b. Upload image to book-pages bucket                 │
+│     c. Insert record into book_pages table               │
+│  3. Update books table: page_count, status='ready'       │
+└──────────────────────────────────────────────────────────┘
+       ↓
+FlipbookReader displays images from book_pages
 ```
 
 ---
 
 ## Implementation Steps
 
-### 1. Create Edge Function Directory & Files
+### Step 1: Make book-pages Bucket Public
 
-**File: `supabase/functions/process-book/index.ts`**
+The bucket needs to be public so the frontend can load page images.
 
-The function will:
-- Accept POST requests with `bookId` and `pdfPath` in the body
-- Use the service role client to download the PDF from private storage
-- Parse the PDF using `pdf-lib` to count pages
-- Update the `books` table with `page_count` and `status = 'ready'`
-- Handle errors gracefully, setting `status = 'error'` on failure
-
-Key implementation details:
-- Uses `npm:pdf-lib` for reliable PDF parsing in Deno
-- Creates admin client with `SUPABASE_SERVICE_ROLE_KEY` for storage access
-- Includes CORS headers for browser requests
-- Validates admin authentication before processing
-
-### 2. Update `supabase/config.toml`
-
-Add function configuration with JWT verification disabled (we'll verify auth in code):
-
-```toml
-[functions.process-book]
-verify_jwt = false
+```sql
+UPDATE storage.buckets SET public = true WHERE id = 'book-pages';
 ```
 
-### 3. Update Frontend to Call the Function
+### Step 2: Update Edge Function for Image Generation
 
-**File: `src/pages/admin/Books.tsx`**
+Replace `pdf-lib` with `pdf.js` which supports rendering pages to canvas.
 
-After uploading the PDF, the `createBook` mutation will invoke the edge function:
+**Key changes to `supabase/functions/process-book/index.ts`:**
 
-```typescript
-// After file uploads complete
-await supabase.functions.invoke('process-book', {
-  body: { bookId, pdfPath: `${bookId}/source.pdf` }
-});
-```
+1. Import `pdf.js` instead of `pdf-lib`
+2. For each page in the PDF:
+   - Render to `OffscreenCanvas` at 1.5x scale for good quality
+   - Convert canvas to PNG blob
+   - Upload to `book-pages` bucket as `{bookId}/page-{num}.png`
+   - Insert record into `book_pages` table with public URL
+3. Update book status to 'ready' when complete
 
-This triggers the processing automatically when a book is created.
-
----
-
-## Technical Details
-
-### Edge Function Code Structure
+**Technical implementation:**
 
 ```typescript
-// 1. CORS headers for browser access
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, ...'
+import * as pdfjs from "https://esm.sh/pdfjs-dist@4.0.379/build/pdf.mjs";
+
+// Load PDF
+const loadingTask = pdfjs.getDocument({ data: pdfBytes });
+const pdfDocument = await loadingTask.promise;
+const pageCount = pdfDocument.numPages;
+
+// Process each page
+for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
+  const page = await pdfDocument.getPage(pageNum);
+  const viewport = page.getViewport({ scale: 1.5 });
+  
+  // Render to canvas
+  const canvas = new OffscreenCanvas(viewport.width, viewport.height);
+  const ctx = canvas.getContext("2d");
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  
+  // Convert to PNG
+  const blob = await canvas.convertToBlob({ type: "image/png" });
+  
+  // Upload to storage
+  const imagePath = `${bookId}/page-${pageNum}.png`;
+  await supabaseAdmin.storage.from("book-pages").upload(imagePath, blob);
+  
+  // Get public URL and insert into database
+  const { publicUrl } = supabaseAdmin.storage.from("book-pages").getPublicUrl(imagePath);
+  await supabaseAdmin.from("book_pages").insert({
+    book_id: bookId,
+    page_number: pageNum,
+    image_url: publicUrl
+  });
 }
-
-// 2. Create admin client with service role
-const supabaseAdmin = createClient(url, serviceRoleKey)
-
-// 3. Download PDF from private bucket
-const { data: pdfData } = await supabaseAdmin.storage
-  .from('pdf-uploads')
-  .download(pdfPath)
-
-// 4. Count pages using pdf-lib
-const pdfDoc = await PDFDocument.load(await pdfData.arrayBuffer())
-const pageCount = pdfDoc.getPageCount()
-
-// 5. Update book record
-await supabaseAdmin.from('books')
-  .update({ page_count: pageCount, status: 'ready' })
-  .eq('id', bookId)
 ```
 
-### Security Considerations
-- Function validates the calling user is an admin before processing
-- Uses service role key only server-side (never exposed to client)
-- PDF bucket remains private - only edge function can access via admin client
-
 ---
 
-## Files to Create/Modify
+## Files to Modify
 
-| File | Action | Purpose |
+| File | Action | Changes |
 |------|--------|---------|
-| `supabase/functions/process-book/index.ts` | Create | Main edge function logic |
-| `supabase/config.toml` | Update | Add function configuration |
-| `src/pages/admin/Books.tsx` | Update | Call edge function after upload |
+| `supabase/functions/process-book/index.ts` | Rewrite | Replace pdf-lib with pdf.js, add page rendering and upload logic |
+| Database | SQL Migration | Make book-pages bucket public |
 
 ---
 
-## Bug Fixes (Existing TypeScript Errors)
+## Technical Considerations
 
-The following minor fixes will also be applied:
+### Memory Management
+- Processing large PDFs (100+ pages) may hit memory limits
+- Consider processing in batches or implementing pagination for very large books
 
-1. **`src/components/ui/calendar.tsx`** - Remove unused `_props` parameter declarations
-2. **`src/contexts/AuthContext.tsx`** - Prefix unused `event` parameter with underscore
+### Timeout Handling  
+- Edge functions have a timeout limit
+- For PDFs with many pages, the function may need chunking or async processing
+
+### Image Quality
+- Scale factor of 1.5 provides good balance of quality and file size
+- Can be adjusted based on requirements (1.0 = smaller files, 2.0 = higher quality)
+
+### Error Recovery
+- If processing fails mid-way, some pages may be uploaded but not all
+- Consider adding cleanup logic or resumable processing
 
 ---
 
@@ -133,9 +129,8 @@ The following minor fixes will also be applied:
 
 After implementation:
 1. Admin uploads a PDF book
-2. Book is created with `status: 'processing'`
-3. Edge function is automatically invoked
-4. PDF is downloaded and page count is extracted
-5. Book record is updated with `page_count` and `status: 'ready'`
-6. Students can now see the book in their grade-filtered library
-
+2. Edge function processes each page → generates PNG images
+3. Images stored in public `book-pages` bucket
+4. Records inserted into `book_pages` table with image URLs
+5. FlipbookReader queries `book_pages` and displays actual content
+6. Students can read books with visible page content
