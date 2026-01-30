@@ -140,6 +140,16 @@ export default function AdminBooks() {
 
         if (updateError) throw updateError;
 
+        // 5. Invoke edge function to process PDF and count pages
+        const { error: processError } = await supabase.functions.invoke('process-book', {
+          body: { bookId, pdfPath: `${bookId}/source.pdf` }
+        });
+
+        if (processError) {
+          console.error('Process book error:', processError);
+          // Don't throw - book is created, just status will remain 'processing'
+        }
+
         return book;
       } finally {
         setIsUploading(false);

@@ -21,6 +21,7 @@ export type Database = {
           id: string
           image_url: string
           page_number: number
+          text_content: string | null
         }
         Insert: {
           book_id: string
@@ -28,6 +29,7 @@ export type Database = {
           id?: string
           image_url: string
           page_number: number
+          text_content?: string | null
         }
         Update: {
           book_id?: string
@@ -35,6 +37,7 @@ export type Database = {
           id?: string
           image_url?: string
           page_number?: number
+          text_content?: string | null
         }
         Relationships: [
           {
@@ -53,6 +56,7 @@ export type Database = {
           grade_level: number
           id: string
           page_count: number | null
+          pdf_url: string | null
           status: Database["public"]["Enums"]["book_status"]
           title: string
           updated_at: string
@@ -64,6 +68,7 @@ export type Database = {
           grade_level: number
           id?: string
           page_count?: number | null
+          pdf_url?: string | null
           status?: Database["public"]["Enums"]["book_status"]
           title: string
           updated_at?: string
@@ -75,6 +80,7 @@ export type Database = {
           grade_level?: number
           id?: string
           page_count?: number | null
+          pdf_url?: string | null
           status?: Database["public"]["Enums"]["book_status"]
           title?: string
           updated_at?: string
