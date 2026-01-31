@@ -72,11 +72,11 @@ serve(async (req) => {
             const REPO_OWNER = payload.repository.owner.login;
             const REPO_NAME = payload.repository.name;
 
-            if (GITHUB_TOKEN && Deno.env.get('WEBHOOK_STANDBY') !== 'true') {
+            if (GITHUB_TOKEN) {
                 // Trigger a GitHub Action workflow dispatch
-                // This assumes you have a .github/workflows/deploy.yml with workflow_dispatch trigger
+                // This will trigger the CI/CD pipeline in .github/workflows/main.yml
                 const response = await fetch(
-                    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/deploy.yml/dispatches`,
+                    `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/workflows/main.yml/dispatches`,
                     {
                         method: 'POST',
                         headers: {
@@ -91,8 +91,6 @@ serve(async (req) => {
                 console.log(`GitHub API Response status: ${response.status}`);
 
                 console.log('Successfully received webhook and triggered deployment workflow.');
-            } else if (Deno.env.get('WEBHOOK_STANDBY') === 'true') {
-                console.log('Webhook is in STANDBY mode. Skipping trigger.');
             } else {
                 console.log('GITHUB_TOKEN not set, skipping remote trigger. Webhook verified successfully.');
             }
