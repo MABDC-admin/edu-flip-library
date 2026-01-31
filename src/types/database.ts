@@ -35,6 +35,8 @@ export interface BookPage {
   book_id: string;
   page_number: number;
   image_url: string;
+  svg_url?: string | null;
+  thumbnail_url?: string | null;
   text_content: string | null;
   created_at: string;
 }

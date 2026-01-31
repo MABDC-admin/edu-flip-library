@@ -33,55 +33,98 @@ export function usePdfToImages() {
       // Delete any existing pages for this book (in case of re-upload)
       await supabase.from("book_pages").delete().eq("book_id", bookId);
 
-      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        const page = await pdfDocument.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
+      const BATCH_SIZE = 3; // Process 3 pages at a time to stay responsive
+      
+      for (let i = 1; i <= numPages; i += BATCH_SIZE) {
+        const batchEnd = Math.min(i + BATCH_SIZE - 1, numPages);
+        const batchPromises = [];
 
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.floor(viewport.width);
-        canvas.height = Math.floor(viewport.height);
-        const ctx = canvas.getContext("2d");
+        for (let pageNum = i; pageNum <= batchEnd; pageNum++) {
+          batchPromises.push((async (pNum) => {
+            const page = await pdfDocument.getPage(pNum);
+            
+            // 1. Render High-Res PNG (Scale 2.0)
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.floor(viewport.width);
+            canvas.height = Math.floor(viewport.height);
+            const ctx = canvas.getContext("2d");
+            if (!ctx) throw new Error("Failed to get 2D context");
+            await (page.render({ canvasContext: ctx, viewport, canvas } as any) as any).promise;
+            const pngBlob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.9));
+            if (!pngBlob) throw new Error(`Failed to export page ${pNum} as PNG`);
 
-        if (!ctx) throw new Error("Failed to get 2D context");
+            // 2. Render Thumbnail (Scale 0.3)
+            const thumbViewport = page.getViewport({ scale: 0.3 });
+            const thumbCanvas = document.createElement("canvas");
+            thumbCanvas.width = Math.floor(thumbViewport.width);
+            thumbCanvas.height = Math.floor(thumbViewport.height);
+            const thumbCtx = thumbCanvas.getContext("2d");
+            if (thumbCtx) {
+              await (page.render({ canvasContext: thumbCtx, viewport: thumbViewport, canvas: thumbCanvas } as any) as any).promise;
+            }
+            const thumbBlob = await new Promise<Blob | null>((resolve) => thumbCanvas.toBlob(resolve, "image/png", 0.7));
 
-        // Use `as any` because react-pdf types expect a `canvas` property
-        // but at runtime the library works fine with just canvasContext + viewport.
-        await (page.render({ canvasContext: ctx, viewport, canvas } as any) as any).promise;
+            // 3. Render SVG
+            let svgUrl = null;
+            try {
+              const operatorList = await page.getOperatorList();
+              const svgGfx = new pdfjs.SVGGraphics(page.commonObjs, page.objs);
+              const svgElement = await svgGfx.getSVG(operatorList, viewport);
+              const svgString = new XMLSerializer().serializeToString(svgElement);
+              const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
+              
+              const svgPath = `${bookId}/page-${pNum}.svg`;
+              const { error: svgError } = await supabase.storage
+                .from("book-pages")
+                .upload(svgPath, svgBlob, { contentType: "image/svg+xml", upsert: true });
+              
+              if (!svgError) {
+                const { data: { publicUrl } } = supabase.storage.from("book-pages").getPublicUrl(svgPath);
+                svgUrl = publicUrl;
+              }
+            } catch (svgErr) {
+              console.error(`Failed to generate SVG for page ${pNum}:`, svgErr);
+            }
 
-        setProgress((p) => ({ ...p, status: "uploading" }));
+            // 4. Upload PNGs
+            const imagePath = `${bookId}/page-${pNum}.png`;
+            const thumbPath = `${bookId}/thumb-${pNum}.png`;
 
-        const blob = await new Promise<Blob | null>((resolve) =>
-          canvas.toBlob(resolve, "image/png")
-        );
-        if (!blob) throw new Error(`Failed to export page ${pageNum} as PNG`);
+            const [pngUpload, thumbUpload] = await Promise.all([
+              supabase.storage.from("book-pages").upload(imagePath, pngBlob, { contentType: "image/png", upsert: true }),
+              thumbBlob ? supabase.storage.from("book-pages").upload(thumbPath, thumbBlob, { contentType: "image/png", upsert: true }) : Promise.resolve({ error: null })
+            ]);
 
-        const imagePath = `${bookId}/page-${pageNum}.png`;
-        const { error: uploadError } = await supabase.storage
-          .from("book-pages")
-          .upload(imagePath, blob, {
-            contentType: "image/png",
-            upsert: true,
-          });
+            if (pngUpload.error) throw pngUpload.error;
 
-        if (uploadError) throw uploadError;
+            const { data: { publicUrl: pngUrl } } = supabase.storage.from("book-pages").getPublicUrl(imagePath);
+            let thumbPublicUrl = null;
+            if (thumbBlob && !thumbUpload.error) {
+              const { data: { publicUrl } } = supabase.storage.from("book-pages").getPublicUrl(thumbPath);
+              thumbPublicUrl = publicUrl;
+            }
 
-        const {
-          data: { publicUrl },
-        } = supabase.storage.from("book-pages").getPublicUrl(imagePath);
+            // 5. Insert to DB
+            const { error: insertError } = await supabase.from("book_pages").insert({
+              book_id: bookId,
+              page_number: pNum,
+              image_url: pngUrl,
+              svg_url: svgUrl,
+              thumbnail_url: thumbPublicUrl,
+            });
 
-        const { error: insertError } = await supabase.from("book_pages").insert({
-          book_id: bookId,
-          page_number: pageNum,
-          image_url: publicUrl,
-        });
+            if (insertError) throw insertError;
 
-        if (insertError) throw insertError;
+            setProgress((p) => ({
+              ...p,
+              done: p.done + 1,
+              status: p.done + 1 === numPages ? "done" : "rendering",
+            }));
+          })(pageNum));
+        }
 
-        setProgress((p) => ({
-          ...p,
-          done: pageNum,
-          status: pageNum === numPages ? "done" : "rendering",
-        }));
+        await Promise.all(batchPromises);
       }
 
       // Cleanup pdf.js resources

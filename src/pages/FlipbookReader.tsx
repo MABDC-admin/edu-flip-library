@@ -102,10 +102,10 @@ export default function FlipbookReader() {
       const isMobile = window.innerWidth < 768;
       const isTablet = window.innerWidth >= 768 && window.innerWidth < 1024;
       const isDesktop = window.innerWidth >= 1024;
-      
+
       let pageWidth: number;
       let pageHeight: number;
-      
+
       if (isMobile) {
         // Mobile: single page, nearly full width
         pageWidth = Math.min(window.innerWidth - 32, 400);
@@ -119,11 +119,11 @@ export default function FlipbookReader() {
         pageWidth = Math.min((window.innerWidth - 200) / 2, 500);
         pageHeight = Math.min(window.innerHeight - 200, pageWidth * 1.414);
       }
-      
+
       setFlipbookDimensions({ width: Math.round(pageWidth), height: Math.round(pageHeight) });
       setViewMode(isDesktop ? 'double' : 'single');
     };
-    
+
     calculateDimensions();
     window.addEventListener('resize', calculateDimensions);
     return () => window.removeEventListener('resize', calculateDimensions);
@@ -167,7 +167,7 @@ export default function FlipbookReader() {
   const playFlipSound = () => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
     audio.volume = 0.3;
-    audio.play().catch(() => {});
+    audio.play().catch(() => { });
   };
 
   // Handle page flip from react-pageflip
@@ -246,6 +246,38 @@ export default function FlipbookReader() {
   const zoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
   const resetZoom = () => setZoom(1);
 
+  // Touch gesture handling
+  const touchStartX = useRef<number | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null) return;
+
+    const touchEndX = e.changedTouches[0].clientX;
+    const diff = touchStartX.current - touchEndX;
+
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) {
+        handleNext();
+      } else {
+        handlePrev();
+      }
+    }
+
+    touchStartX.current = null;
+  };
+
+  // Determine page data for image-based rendering
+  const currentPageData = pages?.find((p) => p.page_number === currentPage);
+  const leftPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage) : currentPageData;
+  const rightPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage + 1) : null;
+
+  // Determine which page numbers to show (for PDF rendering)
+  const leftPageNum = viewMode === 'double' ? currentPage : currentPage;
+  const rightPageNum = viewMode === 'double' ? currentPage + 1 : null;
   if (bookLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -270,9 +302,8 @@ export default function FlipbookReader() {
 
   // Prepare page data for the flipbook
   const flipbookPages = pages && pages.length > 0
-    ? pages.sort((a, b) => a.page_number - b.page_number)
+    ? [...pages].sort((a, b) => a.page_number - b.page_number)
     : null;
-
   return (
     <div
       ref={containerRef}
@@ -316,22 +347,38 @@ export default function FlipbookReader() {
                 </SheetTitle>
               </SheetHeader>
               <ScrollArea className="h-full mt-4 pb-8">
-                <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-4 px-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => {
-                        goToPage(p);
-                        setShowThumbnails(false);
-                      }}
-                      className={cn(
-                        "p-4 rounded-md bg-slate-800 hover:bg-slate-700 transition-colors text-center",
-                        currentPage === p ? "ring-2 ring-primary" : ""
-                      )}
-                    >
-                      <span className="text-sm font-bold">Page {p}</span>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4 px-2">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                    const pageData = pages?.find(pd => pd.page_number === p);
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => {
+                          goToPage(p);
+                          setShowThumbnails(false);
+                        }}
+                        className={cn(
+                          "relative aspect-[3/4] rounded-md bg-slate-800 hover:bg-slate-700 transition-all overflow-hidden group",
+                          currentPage === p ? "ring-2 ring-primary scale-95" : ""
+                        )}
+                      >
+                        {pageData?.thumbnail_url ? (
+                          <img
+                            src={pageData.thumbnail_url}
+                            alt={`Page ${p}`}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex items-center justify-center w-full h-full text-slate-500 font-bold">
+                            {p}
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                          <span className="text-xs font-bold text-white">Page {p}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </ScrollArea>
             </SheetContent>
@@ -395,7 +442,11 @@ export default function FlipbookReader() {
       </header>
 
       {/* Main reading area */}
-      <main className="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+      <main
+        className="flex-1 flex items-center justify-center p-4 relative overflow-hidden"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Hidden document loader for page count */}
         {!flipbookPages && (
           <div className="hidden">
@@ -470,7 +521,7 @@ export default function FlipbookReader() {
               {flipbookPages.map((page) => (
                 <FlipPage key={page.id} pageNumber={page.page_number}>
                   <img
-                    src={page.image_url}
+                    src={page.svg_url || page.image_url}
                     alt={`Page ${page.page_number}`}
                     className="w-full h-full object-contain"
                     loading={page.page_number <= 4 ? "eager" : "lazy"}
@@ -577,7 +628,7 @@ export default function FlipbookReader() {
         <div className="max-w-4xl mx-auto space-y-4">
           <div className="flex items-center gap-6 text-white">
             <span className="text-sm font-display font-medium min-w-[70px] bg-white/10 px-3 py-1 rounded-full">
-              Page {currentPage}
+              Page {currentPage} {viewMode === 'double' && totalPages > 1 && currentPage < totalPages && `- ${Math.min(currentPage + 1, totalPages)}`}
             </span>
 
             <Slider
