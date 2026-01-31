@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      book_annotations: {
+        Row: {
+          book_id: string
+          content: Json
+          created_at: string
+          id: string
+          page_number: number
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          content: Json
+          created_at?: string
+          id?: string
+          page_number: number
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          content?: Json
+          created_at?: string
+          id?: string
+          page_number?: number
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_annotations_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_pages: {
         Row: {
           book_id: string
