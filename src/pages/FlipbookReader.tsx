@@ -589,9 +589,9 @@ export default function FlipbookReader() {
                     currentPage === p ? "ring-2 ring-primary scale-105 z-10" : "opacity-60 hover:opacity-100"
                   )}
                 >
-                  {pageData?.svg_url || pageData?.thumbnail_url ? (
+                  {pageData?.svg_url || pageData?.thumbnail_url || pageData?.image_url ? (
                     <img
-                      src={(pageData.svg_url || pageData.thumbnail_url) as string}
+                      src={(pageData.svg_url || pageData.thumbnail_url || pageData.image_url) as string}
                       alt={`Page ${p}`}
                       className="w-full h-full object-contain"
                     />
