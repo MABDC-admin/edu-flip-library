@@ -1,5 +1,6 @@
-// deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.93.3";
+
+declare const Deno: any;
 
 // Use pdfjs-serverless - optimized for Deno/serverless environments (no worker required)
 import { resolvePDFJS } from "https://esm.sh/pdfjs-serverless@0.5.1?target=deno";
@@ -22,7 +23,7 @@ async function getPdfjs(): Promise<any> {
 
 // Deno type declarations for OffscreenCanvas (Web API available in Deno)
 declare const OffscreenCanvas: {
-  new (width: number, height: number): {
+  new(width: number, height: number): {
     width: number;
     height: number;
     getContext(contextId: "2d"): any;
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
     if (downloadError || !pdfData) throw new Error(`Download error: ${downloadError?.message}`);
 
     const pdfBytes = new Uint8Array(await pdfData.arrayBuffer());
-    
+
     const pdfjs = await getPdfjs();
 
     if (typeof pdfjs?.getDocument !== "function") {
@@ -95,11 +96,11 @@ Deno.serve(async (req) => {
     // If OffscreenCanvas is missing, we cannot render pages to images here.
     const OffscreenCanvasCtor = (globalThis as any).OffscreenCanvas as
       | (new (width: number, height: number) => {
-          width: number;
-          height: number;
-          getContext(contextId: "2d"): any;
-          convertToBlob(options?: { type?: string; quality?: number }): Promise<Blob>;
-        })
+        width: number;
+        height: number;
+        getContext(contextId: "2d"): any;
+        convertToBlob(options?: { type?: string; quality?: number }): Promise<Blob>;
+      })
       | undefined;
 
     if (!OffscreenCanvasCtor) {
@@ -125,47 +126,74 @@ Deno.serve(async (req) => {
     for (let pageNum = 1; pageNum <= pageCount; pageNum++) {
       try {
         const page = await pdfDocument.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
 
-        // Setup offscreen canvas
-        const canvas = new OffscreenCanvasCtor(
-          Math.floor(viewport.width),
-          Math.floor(viewport.height),
+        // --- 1. Generate High-Res Image (scale 1.5) ---
+        const highResViewport = page.getViewport({ scale: 1.5 });
+        const highResCanvas = new OffscreenCanvasCtor(
+          Math.floor(highResViewport.width),
+          Math.floor(highResViewport.height),
         );
-        const ctx = canvas.getContext("2d");
+        const highResCtx = highResCanvas.getContext("2d");
+        if (!highResCtx) throw new Error("Could not get high-res 2D context");
 
-        if (!ctx) throw new Error("Could not get 2D context");
+        await page.render({ canvasContext: highResCtx, viewport: highResViewport }).promise;
+        const highResBlob = await highResCanvas.convertToBlob({ type: "image/png" });
 
-        await page.render({ canvasContext: ctx, viewport }).promise;
-        const blob = await canvas.convertToBlob({ type: "image/png" });
+        // --- 2. Generate Low-Res Thumbnail (scale 0.3) ---
+        const thumbViewport = page.getViewport({ scale: 0.3 });
+        const thumbCanvas = new OffscreenCanvasCtor(
+          Math.floor(thumbViewport.width),
+          Math.floor(thumbViewport.height),
+        );
+        const thumbCtx = thumbCanvas.getContext("2d");
+        if (!thumbCtx) throw new Error("Could not get thumbnail 2D context");
 
-        // Upload to storage
+        await page.render({ canvasContext: thumbCtx, viewport: thumbViewport }).promise;
+        const thumbBlob = await thumbCanvas.convertToBlob({ type: "image/png" });
+
+        // --- 3. Upload Both to Storage ---
         const imagePath = `${bookId}/page-${pageNum}.png`;
-        const { error: uploadError } = await supabaseAdmin.storage
+        const thumbPath = `${bookId}/thumb-${pageNum}.png`;
+
+        // Upload High-Res
+        const { error: highResUploadError } = await supabaseAdmin.storage
           .from("book-pages")
-          .upload(imagePath, blob, {
+          .upload(imagePath, highResBlob, {
             contentType: "image/png",
             upsert: true
           });
+        if (highResUploadError) throw highResUploadError;
 
-        if (uploadError) throw uploadError;
+        // Upload Thumbnail
+        const { error: thumbUploadError } = await supabaseAdmin.storage
+          .from("book-pages")
+          .upload(thumbPath, thumbBlob, {
+            contentType: "image/png",
+            upsert: true
+          });
+        if (thumbUploadError) throw thumbUploadError;
 
-        // Get public URL
-        const { data: { publicUrl } } = supabaseAdmin.storage
+        // --- 4. Get Public URLs ---
+        const { data: { publicUrl: highResUrl } } = supabaseAdmin.storage
           .from("book-pages")
           .getPublicUrl(imagePath);
 
-        // Insert into database
+        const { data: { publicUrl: thumbUrl } } = supabaseAdmin.storage
+          .from("book-pages")
+          .getPublicUrl(thumbPath);
+
+        // --- 5. Insert into database ---
         await supabaseAdmin.from("book_pages").insert({
           book_id: bookId,
           page_number: pageNum,
-          image_url: publicUrl,
+          image_url: highResUrl,
+          thumbnail_url: thumbUrl,
         });
 
         processedPages++;
 
-        if (pageNum % 10 === 0) {
-          console.log(`Processed ${pageNum}/${pageCount} pages`);
+        if (pageNum % 5 === 0) {
+          console.log(`Processed ${pageNum}/${pageCount} pages (High-Res + Thumbnails)`);
         }
 
       } catch (pageError) {
