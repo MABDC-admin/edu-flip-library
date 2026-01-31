@@ -2,8 +2,9 @@ import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
+import bcrypt from "bcryptjs"
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const nextAuth = NextAuth({
     adapter: PrismaAdapter(prisma),
     providers: [
         Credentials({
@@ -13,12 +14,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                 password: { label: "Password", type: "password" }
             },
             authorize: async (credentials) => {
-                // TODO: Implement actual user verification against DB
-                // For now, return a mock user if credentials match (dev only)
-                if (credentials.email === "admin@example.com" && credentials.password === "password") {
-                    return { id: "1", name: "Admin", email: "admin@example.com", role: "admin" }
+                const { email, password } = credentials as { email: string; password: string }
+
+                if (!email || !password) return null
+
+                const user = await prisma.user.findUnique({
+                    where: { email }
+                })
+
+                if (!user || !user.password) return null
+
+                const isValid = await bcrypt.compare(password, user.password)
+
+                if (!isValid) return null
+
+                return {
+                    id: user.id,
+                    name: user.name,
+                    email: user.email,
+                    role: user.role,
                 }
-                return null
             },
         }),
     ],
@@ -40,3 +55,5 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
     },
 })
+
+export const { handlers, auth, signIn, signOut } = nextAuth
