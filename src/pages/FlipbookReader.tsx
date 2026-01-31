@@ -170,7 +170,7 @@ export default function FlipbookReader() {
   };
 
   // Handle page flip from react-pageflip
-  const onFlip = useCallback((e: any) => {
+  const onFlip = useCallback((e: { data: number }) => {
     const newPage = e.data + 1; // react-pageflip uses 0-indexed pages
     setCurrentPage(newPage);
     playFlipSound();
