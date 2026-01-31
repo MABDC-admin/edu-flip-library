@@ -2,6 +2,12 @@ import { useState, useCallback } from "react";
 import { pdfjs } from "react-pdf";
 import { supabase } from "@/integrations/supabase/client";
 
+// Configure PDF.js worker using local bundled worker (Vite-compatible)
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/build/pdf.worker.min.mjs",
+  import.meta.url
+).toString();
+
 /**
  * In-browser PDF-to-image converter.
  * Uses react-pdf (pdf.js) + canvas to render each page as a PNG,
@@ -65,29 +71,7 @@ export function usePdfToImages() {
             }
             const thumbBlob = await new Promise<Blob | null>((resolve) => thumbCanvas.toBlob(resolve, "image/png", 0.7));
 
-            // 3. Render SVG
-            let svgUrl = null;
-            try {
-              const operatorList = await page.getOperatorList();
-              const svgGfx = new pdfjs.SVGGraphics(page.commonObjs, page.objs);
-              const svgElement = await svgGfx.getSVG(operatorList, viewport);
-              const svgString = new XMLSerializer().serializeToString(svgElement);
-              const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
-              
-              const svgPath = `${bookId}/page-${pNum}.svg`;
-              const { error: svgError } = await supabase.storage
-                .from("book-pages")
-                .upload(svgPath, svgBlob, { contentType: "image/svg+xml", upsert: true });
-              
-              if (!svgError) {
-                const { data: { publicUrl } } = supabase.storage.from("book-pages").getPublicUrl(svgPath);
-                svgUrl = publicUrl;
-              }
-            } catch (svgErr) {
-              console.error(`Failed to generate SVG for page ${pNum}:`, svgErr);
-            }
-
-            // 4. Upload PNGs
+            // 3. Upload PNGs
             const imagePath = `${bookId}/page-${pNum}.png`;
             const thumbPath = `${bookId}/thumb-${pNum}.png`;
 
@@ -110,7 +94,7 @@ export function usePdfToImages() {
               book_id: bookId,
               page_number: pNum,
               image_url: pngUrl,
-              svg_url: svgUrl,
+              svg_url: null,
               thumbnail_url: thumbPublicUrl,
             });
 
