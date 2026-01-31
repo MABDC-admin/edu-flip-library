@@ -54,6 +54,7 @@ export type Database = {
           cover_url: string | null
           created_at: string
           grade_level: number
+          html5_url: string | null
           id: string
           page_count: number | null
           pdf_url: string | null
@@ -66,6 +67,7 @@ export type Database = {
           cover_url?: string | null
           created_at?: string
           grade_level: number
+          html5_url?: string | null
           id?: string
           page_count?: number | null
           pdf_url?: string | null
@@ -78,6 +80,7 @@ export type Database = {
           cover_url?: string | null
           created_at?: string
           grade_level?: number
+          html5_url?: string | null
           id?: string
           page_count?: number | null
           pdf_url?: string | null
