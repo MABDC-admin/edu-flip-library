@@ -270,14 +270,6 @@ export default function FlipbookReader() {
     touchStartX.current = null;
   };
 
-  // Determine page data for image-based rendering
-  const currentPageData = pages?.find((p) => p.page_number === currentPage);
-  const leftPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage) : currentPageData;
-  const rightPageData = viewMode === 'double' ? pages?.find((p) => p.page_number === currentPage + 1) : null;
-
-  // Determine which page numbers to show (for PDF rendering)
-  const leftPageNum = viewMode === 'double' ? currentPage : currentPage;
-  const rightPageNum = viewMode === 'double' ? currentPage + 1 : null;
   if (bookLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">

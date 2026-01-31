@@ -21,7 +21,9 @@ export type Database = {
           id: string
           image_url: string
           page_number: number
+          svg_url: string | null
           text_content: string | null
+          thumbnail_url: string | null
         }
         Insert: {
           book_id: string
@@ -29,7 +31,9 @@ export type Database = {
           id?: string
           image_url: string
           page_number: number
+          svg_url?: string | null
           text_content?: string | null
+          thumbnail_url?: string | null
         }
         Update: {
           book_id?: string
@@ -37,7 +41,9 @@ export type Database = {
           id?: string
           image_url?: string
           page_number?: number
+          svg_url?: string | null
           text_content?: string | null
+          thumbnail_url?: string | null
         }
         Relationships: [
           {
