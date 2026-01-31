@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useBook, useBookPages, useReadingProgress, useUpdateReadingProgress } from '@/hooks/useBooks';
 import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
 import {
   ChevronLeft,
   ChevronRight,
@@ -11,31 +10,22 @@ import {
   Minimize2,
   ZoomIn,
   ZoomOut,
-  RotateCcw,
+  BookOpen,
+  Square,
   LayoutGrid,
-  BookCopy,
-  GraduationCap,
-  CheckCircle2,
-  Loader2
+  Monitor,
+  Loader2,
+  Hand,
+  Printer,
+  Type,
+  Pencil,
+  Highlighter,
+  MessageSquare,
+  Undo2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+import { supabase } from '@/integrations/supabase/client';
 
 // react-pdf imports
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -45,8 +35,7 @@ import 'react-pdf/dist/Page/TextLayer.css';
 // react-pageflip for 3D page curl animations
 import HTMLFlipBook from 'react-pageflip';
 
-// Configure PDF worker
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+// Worker is configured globally in src/lib/pdf-config.ts
 
 // Optimize PDF loading options
 const pdfOptions = {
@@ -89,12 +78,15 @@ export default function FlipbookReader() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const [showThumbnails, setShowThumbnails] = useState(false);
   const [viewMode, setViewMode] = useState<'single' | 'double'>('single');
-  const [isQuizOpen, setIsQuizOpen] = useState(false);
   const [flipbookDimensions, setFlipbookDimensions] = useState({ width: 400, height: 566 });
   const containerRef = useRef<HTMLDivElement>(null);
   const flipBookRef = useRef<any>(null);
+  const [activeTool, setActiveTool] = useState<'hand' | 'text' | 'pencil' | 'highlighter' | 'note'>('hand');
+  const [annotations, setAnnotations] = useState<any[]>([]);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [showThumbnails, setShowThumbnails] = useState(true);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   // Calculate flipbook dimensions based on viewport and mode
   useEffect(() => {
@@ -129,6 +121,54 @@ export default function FlipbookReader() {
     return () => window.removeEventListener('resize', calculateDimensions);
   }, []);
 
+  // Fetch annotations on mount
+  useEffect(() => {
+    const fetchAnnotations = async () => {
+      if (!bookId) return;
+      const { data } = await (supabase as any).from('book_annotations')
+        .select('*')
+        .eq('book_id', bookId);
+
+      if (data) {
+        setAnnotations((data as any[]).map(a => ({
+          ...a,
+          page: a.page_number,
+          ...(a.content || {})
+        })));
+      }
+    };
+    fetchAnnotations();
+  }, [bookId]);
+
+  const saveAnnotation = async (annotation: any) => {
+    if (!bookId) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await (supabase as any).from('book_annotations')
+      .insert([{
+        book_id: bookId,
+        user_id: user.id,
+        page_number: annotation.page,
+        type: annotation.type,
+        content: {
+          points: annotation.points,
+          color: annotation.color,
+          width: annotation.width
+        }
+      }])
+      .select()
+      .single();
+
+    if (data) {
+      setAnnotations(prev => [...prev.filter(a => !a.isLocal), {
+        ...(data as any),
+        page: (data as any).page_number,
+        ...((data as any).content || {})
+      }]);
+    }
+  };
+
   // Initialize from saved progress
   useEffect(() => {
     if (progress?.current_page) {
@@ -162,7 +202,14 @@ export default function FlipbookReader() {
     return () => clearTimeout(timeout);
   }, [currentPage, saveProgress]);
 
-  const totalPages = numPages || book?.page_count || pages?.length || 0;
+  // Resolve the full PDF URL for react-pdf
+  const pdfUrl = book?.pdf_url ? supabase.storage.from('pdf-uploads').getPublicUrl(book.pdf_url).data.publicUrl : null;
+
+  const totalPages = Math.max(
+    numPages || 0,
+    book?.page_count || 0,
+    pages?.length || 0
+  );
 
   const playFlipSound = () => {
     const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3');
@@ -242,9 +289,8 @@ export default function FlipbookReader() {
   }, []);
 
   // Zoom controls
-  const zoomIn = () => setZoom((z) => Math.min(z + 0.25, 2));
+  const zoomIn = () => setZoom((z) => Math.min(z + 0.25, 3));
   const zoomOut = () => setZoom((z) => Math.max(z - 0.25, 0.5));
-  const resetZoom = () => setZoom(1);
 
   // Touch gesture handling
   const touchStartX = useRef<number | null>(null);
@@ -270,6 +316,122 @@ export default function FlipbookReader() {
     touchStartX.current = null;
   };
 
+  const startDrawing = (e: React.MouseEvent, pageNum: number) => {
+    if (activeTool === 'note') {
+      const text = prompt('Enter your note:');
+      if (text) {
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        saveAnnotation({
+          page: pageNum,
+          type: 'note',
+          points: [{ x, y }], // Center point
+          color: 'blue',
+          width: 0,
+          text: text
+        });
+      }
+      return;
+    }
+    if (activeTool !== 'pencil' && activeTool !== 'highlighter') return;
+    setIsDrawing(true);
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setAnnotations(prev => [...prev, {
+      page: pageNum,
+      type: activeTool === 'highlighter' ? 'highlighter' : 'pencil',
+      points: [{ x, y }],
+      color: activeTool === 'highlighter' ? 'rgba(255, 255, 0, 0.4)' : 'red',
+      width: activeTool === 'highlighter' ? 15 : 2,
+      isLocal: true
+    }]);
+  };
+
+  const draw = (e: React.MouseEvent, pageNum: number) => {
+    if (!isDrawing || (activeTool !== 'pencil' && activeTool !== 'highlighter')) return;
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setAnnotations(prev => {
+      const last = prev[prev.length - 1];
+      if (!last || last.page !== pageNum) return prev;
+      return [
+        ...prev.slice(0, -1),
+        { ...last, points: [...last.points, { x, y }] }
+      ];
+    });
+
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      const lastAnnotation = annotations[annotations.length - 1];
+      if (lastAnnotation && lastAnnotation.points.length > 1) {
+        const p1 = lastAnnotation.points[lastAnnotation.points.length - 2];
+        const p2 = lastAnnotation.points[lastAnnotation.points.length - 1];
+        ctx.beginPath();
+        ctx.strokeStyle = lastAnnotation.color;
+        ctx.lineWidth = lastAnnotation.width;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+        ctx.stroke();
+      }
+    }
+  };
+
+  const stopDrawing = () => {
+    if (isDrawing) {
+      const lastAnnotation = annotations[annotations.length - 1];
+      if (lastAnnotation && lastAnnotation.isLocal) {
+        saveAnnotation(lastAnnotation);
+      }
+    }
+    setIsDrawing(false);
+  };
+
+  // Redraw annotations when page or tool changes
+  const redrawPage = useCallback((pageNum: number, canvas: HTMLCanvasElement) => {
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const pageAnnotations = annotations.filter(a => a.page_number === pageNum || a.page === pageNum);
+
+    pageAnnotations.forEach(a => {
+      const content = a.content || a;
+      if (a.type === 'note') {
+        const p = content.points?.[0];
+        if (!p) return;
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      } else if (a.type === 'pencil' || a.type === 'highlighter' || !a.type) {
+        if (!content.points || content.points.length < 2) return;
+        ctx.beginPath();
+        ctx.strokeStyle = content.color;
+        ctx.lineWidth = content.width;
+        ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
+        ctx.moveTo(content.points[0].x, content.points[0].y);
+        for (let i = 1; i < content.points.length; i++) {
+          ctx.lineTo(content.points[i].x, content.points[i].y);
+        }
+        ctx.stroke();
+      }
+    });
+  }, [annotations]);
+
+  // Determine page data for image-based rendering
   if (bookLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -305,7 +467,14 @@ export default function FlipbookReader() {
       )}
     >
       {/* Top bar */}
-      <header className="flex items-center justify-between p-4 bg-black/20 backdrop-blur-md text-white z-20">
+      <header
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className={cn(
+          "flex items-center justify-between p-4 bg-black/20 backdrop-blur-md text-white z-20 transition-all duration-300",
+          isMaximized && "translate-y-[-100%] absolute top-0 left-0 right-0"
+        )}
+      >
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -317,109 +486,59 @@ export default function FlipbookReader() {
           </Button>
 
           <div className="hidden sm:block">
-            <h1 className="font-display font-semibold text-lg truncate max-w-[300px]">
+            <h1 className="font-display font-semibold text-lg truncate max-w-[200px] xl:max-w-[400px]">
               {book.title}
             </h1>
           </div>
         </div>
 
         <div className="flex items-center gap-1 sm:gap-2">
-          {/* Thumbnails Sheet */}
-          <Sheet open={showThumbnails} onOpenChange={setShowThumbnails}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10">
-                <LayoutGrid className="w-5 h-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="h-[40vh] sm:h-[50vh] bg-slate-900 border-slate-800 text-white">
-              <SheetHeader>
-                <SheetTitle className="text-white flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4" />
-                  Jump to Page
-                </SheetTitle>
-              </SheetHeader>
-              <ScrollArea className="h-full mt-4 pb-8">
-                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4 px-2">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
-                    const pageData = pages?.find(pd => pd.page_number === p);
-                    return (
-                      <button
-                        key={p}
-                        onClick={() => {
-                          goToPage(p);
-                          setShowThumbnails(false);
-                        }}
-                        className={cn(
-                          "relative aspect-[3/4] rounded-md bg-slate-800 hover:bg-slate-700 transition-all overflow-hidden group",
-                          currentPage === p ? "ring-2 ring-primary scale-95" : ""
-                        )}
-                      >
-                        {pageData?.thumbnail_url ? (
-                          <img
-                            src={pageData.thumbnail_url}
-                            alt={`Page ${p}`}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex items-center justify-center w-full h-full text-slate-500 font-bold">
-                            {p}
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <span className="text-xs font-bold text-white">Page {p}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            </SheetContent>
-          </Sheet>
-
-          <Dialog open={isQuizOpen} onOpenChange={setIsQuizOpen}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" title="Take a Quiz">
-                <GraduationCap className="w-5 h-5" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md bg-slate-900 border-slate-800 text-white">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="w-5 h-5 text-success" />
-                  Quick Knowledge Check
-                </DialogTitle>
-                <DialogDescription className="text-slate-400">
-                  Let's see what you've learned from this book so far!
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="p-4 rounded-lg bg-white/5 border border-white/10">
-                  <p className="font-medium mb-3">What is the main topic of the pages you just read?</p>
-                  <div className="space-y-2">
-                    {["Science & Nature", "History", "Math", "Reading"].map((option, i) => (
-                      <button
-                        key={i}
-                        onClick={() => setIsQuizOpen(false)}
-                        className="w-full text-left p-3 rounded-md bg-white/5 hover:bg-primary/20 transition-colors text-sm"
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <div className="w-[1px] h-6 bg-white/10 mx-1 hidden sm:block" />
-
+          {/* Thumbnail Toggle */}
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setViewMode(v => v === 'single' ? 'double' : 'single')}
-            className="text-white hover:bg-white/10 hidden lg:flex"
+            onClick={() => setShowThumbnails(!showThumbnails)}
+            className={cn("text-white hover:bg-white/10", !showThumbnails && "text-white/40")}
+            title={showThumbnails ? "Hide Thumbnails" : "Show Thumbnails"}
           >
-            {viewMode === 'double' ? <BookCopy className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            <LayoutGrid className="w-5 h-5" />
+          </Button>
+
+          <div className="w-[1px] h-6 bg-white/10 mx-1" />
+
+          {/* View Mode Switcher */}
+          <div className="flex items-center bg-white/5 rounded-full p-1 mr-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setViewMode('single')}
+              className={cn("w-8 h-8 rounded-full transition-colors", viewMode === 'single' ? "bg-primary text-white" : "text-white/40 hover:text-white")}
+              title="Single Page"
+            >
+              <Square className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setViewMode('double')}
+              className={cn("w-8 h-8 rounded-full transition-colors", viewMode === 'double' ? "bg-primary text-white" : "text-white/40 hover:text-white")}
+              title="Double Page"
+            >
+              <BookOpen className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="w-[1px] h-6 bg-white/10 mx-1 hidden sm:block" />
+
+          {/* Theater / Maximize Mode */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsMaximized(!isMaximized)}
+            className={cn("text-white hover:bg-white/10", isMaximized && "text-primary")}
+            title={isMaximized ? "Exit Theater Mode" : "Theater Mode"}
+          >
+            <Monitor className="w-5 h-5" />
           </Button>
 
           <Button
@@ -427,15 +546,15 @@ export default function FlipbookReader() {
             size="icon"
             onClick={toggleFullscreen}
             className="text-white hover:bg-white/10"
+            title="Fullscreen"
           >
             {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </Button>
         </div>
       </header>
 
-      {/* Main reading area */}
       <main
-        className="flex-1 flex items-center justify-center p-4 relative overflow-hidden"
+        className={cn("flex-1 flex items-center justify-center relative overflow-hidden", !isMaximized && "p-4")}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
@@ -443,7 +562,7 @@ export default function FlipbookReader() {
         {!flipbookPages && (
           <div className="hidden">
             <Document
-              file={book.pdf_url}
+              file={(pdfUrl as any) || undefined}
               onLoadSuccess={onDocumentLoadSuccess}
               loading={<div />}
               error={<div>Error loading PDF</div>}
@@ -515,16 +634,30 @@ export default function FlipbookReader() {
                   <img
                     src={page.svg_url || page.image_url}
                     alt={`Page ${page.page_number}`}
-                    className="w-full h-full object-contain"
+                    className="w-full h-full object-contain pointer-events-none"
                     loading={page.page_number <= 4 ? "eager" : "lazy"}
                   />
+                  {activeTool !== 'hand' && activeTool !== 'text' && (
+                    <canvas
+                      width={flipbookDimensions.width}
+                      height={flipbookDimensions.height}
+                      className="absolute inset-0 z-10 cursor-crosshair w-full h-full"
+                      onMouseDown={(e) => startDrawing(e, page.page_number)}
+                      onMouseMove={(e) => draw(e, page.page_number)}
+                      onMouseUp={() => stopDrawing()}
+                      onMouseLeave={() => stopDrawing()}
+                      ref={(el) => {
+                        if (el) redrawPage(page.page_number, el);
+                      }}
+                    />
+                  )}
                 </FlipPage>
               ))}
             </HTMLFlipBook>
           ) : totalPages > 0 ? (
             /* PDF-based flipbook fallback */
             <Document
-              file={book.pdf_url}
+              file={(pdfUrl as any) || undefined}
               options={pdfOptions}
               className="flex justify-center items-center"
               onLoadSuccess={onDocumentLoadSuccess}
@@ -567,9 +700,23 @@ export default function FlipbookReader() {
                     <Page
                       pageNumber={pageNum}
                       width={flipbookDimensions.width}
-                      renderTextLayer={false}
+                      renderTextLayer={activeTool === 'text'}
                       renderAnnotationLayer={false}
                     />
+                    {activeTool !== 'hand' && activeTool !== 'text' && (
+                      <canvas
+                        width={flipbookDimensions.width}
+                        height={flipbookDimensions.width * 1.414}
+                        className="absolute inset-0 z-10 cursor-crosshair w-full h-full"
+                        onMouseDown={(e) => startDrawing(e, pageNum)}
+                        onMouseMove={(e) => draw(e, pageNum)}
+                        onMouseUp={() => stopDrawing()}
+                        onMouseLeave={() => stopDrawing()}
+                        ref={(el) => {
+                          if (el) redrawPage(pageNum, el);
+                        }}
+                      />
+                    )}
                   </FlipPage>
                 ))}
               </HTMLFlipBook>
@@ -582,71 +729,170 @@ export default function FlipbookReader() {
           )}
         </div>
 
-        {/* Zoom controls */}
-        <div className="absolute bottom-6 right-6 flex items-center gap-2 bg-black/40 backdrop-blur-md rounded-full p-2 border border-white/10">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={zoomOut}
-            disabled={zoom <= 0.5}
-            className="w-8 h-8 text-white hover:bg-white/10"
-          >
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <div className="w-[1px] h-4 bg-white/20 mx-1" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={resetZoom}
-            className="w-8 h-8 text-white hover:bg-white/10"
-          >
-            <RotateCcw className="w-4 h-4" />
-          </Button>
-          <div className="w-[1px] h-4 bg-white/20 mx-1" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={zoomIn}
-            disabled={zoom >= 2}
-            className="w-8 h-8 text-white hover:bg-white/10"
-          >
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-        </div>
       </main>
 
-      {/* Bottom progress bar */}
-      <footer className="p-6 bg-black/20 backdrop-blur-md border-t border-white/5 z-20">
-        <div className="max-w-4xl mx-auto space-y-4">
-          <div className="flex items-center gap-6 text-white">
-            <span className="text-sm font-display font-medium min-w-[70px] bg-white/10 px-3 py-1 rounded-full">
-              Page {currentPage} {viewMode === 'double' && totalPages > 1 && currentPage < totalPages && `- ${Math.min(currentPage + 1, totalPages)}`}
-            </span>
+      {isMaximized && (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={(e) => { e.stopPropagation(); setIsMaximized(false); }}
+          className="fixed top-4 right-4 z-50 rounded-full shadow-lg bg-black/40 backdrop-blur-md text-white hover:bg-black/60 border border-white/10"
+        >
+          <Monitor className="w-4 h-4 mr-2" />
+          Exit Theater Mode
+        </Button>
+      )}
 
-            <Slider
-              value={[currentPage]}
-              min={1}
-              max={totalPages || 1}
-              step={1}
-              onValueChange={([value]) => goToPage(value)}
-              className="flex-1"
-            />
-
-            <span className="text-sm text-white/60 font-display min-w-[40px] text-right">
-              {totalPages}
-            </span>
-          </div>
-
-          {/* Progress percentage & metadata */}
-          <div className="flex justify-between items-center text-xs text-white/40 uppercase tracking-widest font-display">
-            <span>EduFlip Library</span>
-            <span className="bg-white/5 px-2 py-0.5 rounded">
-              {Math.round((currentPage / (totalPages || 1)) * 100)}% complete
-            </span>
-            <span>Interactive Flipbook</span>
+      {/* NEW: Horizontal SVG Thumbnail Strip */}
+      {showThumbnails && !isMaximized && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-black/30 backdrop-blur-md py-4 border-t border-white/5 overflow-x-auto scrollbar-hide z-20"
+        >
+          <div className="flex gap-4 px-6 mx-auto w-max">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+              const pageData = pages?.find(pd => pd.page_number === p);
+              return (
+                <button
+                  key={`strip-${p}`}
+                  onClick={() => goToPage(p)}
+                  className={cn(
+                    "relative h-20 aspect-[3/4] rounded bg-slate-800 hover:bg-slate-700 transition-all overflow-hidden border border-white/10 shrink-0 group",
+                    currentPage === p ? "ring-2 ring-primary scale-105 z-10" : "opacity-60 hover:opacity-100"
+                  )}
+                >
+                  {pageData?.svg_url || pageData?.thumbnail_url ? (
+                    <img
+                      src={(pageData.svg_url || pageData.thumbnail_url) as string}
+                      alt={`Page ${p}`}
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full text-[10px] text-slate-500 font-bold">
+                      {p}
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </button>
+              );
+            })}
           </div>
         </div>
-      </footer>
+      )}
+
+      {/* NEW: Advanced Control Bar */}
+      {!isMaximized && (
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          className="bg-black/20 backdrop-blur-md py-2 border-t border-white/5 flex items-center justify-center gap-2 flex-wrap sm:gap-4 px-4 z-20"
+        >
+          <div className="flex items-center bg-white/5 rounded-full p-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTool('hand')}
+              className={cn("w-8 h-8 rounded-full transition-colors", activeTool === 'hand' ? "bg-primary text-white" : "text-white/60 hover:text-white")}
+              title="Hand Tool"
+            >
+              <Hand className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTool('text')}
+              className={cn("w-8 h-8 rounded-full transition-colors", activeTool === 'text' ? "bg-primary text-white" : "text-white/60 hover:text-white")}
+              title="Text Selection"
+            >
+              <Type className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTool('pencil')}
+              className={cn("w-8 h-8 rounded-full transition-colors", activeTool === 'pencil' ? "bg-primary text-white" : "text-white/60 hover:text-white")}
+              title="Pencil Tool"
+            >
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTool('highlighter')}
+              className={cn("w-8 h-8 rounded-full transition-colors", activeTool === 'highlighter' ? "bg-primary text-white" : "text-white/60 hover:text-white")}
+              title="Highlighter"
+            >
+              <Highlighter className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setActiveTool('note')}
+              className={cn("w-8 h-8 rounded-full transition-colors", activeTool === 'note' ? "bg-primary text-white" : "text-white/60 hover:text-white")}
+              title="Add Note"
+            >
+              <MessageSquare className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="w-[1px] h-6 bg-white/10 mx-1" />
+
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={zoomOut}
+              disabled={zoom <= 0.5}
+              className="w-8 h-8 text-white hover:bg-white/10"
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-[10px] text-white/60 font-mono w-12 text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={zoomIn}
+              disabled={zoom >= 3}
+              className="w-8 h-8 text-white hover:bg-white/10"
+            >
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+          </div>
+
+          <div className="w-[1px] h-6 bg-white/10 mx-1" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              if (pdfUrl) {
+                const printWindow = window.open(pdfUrl, '_blank');
+                if (printWindow) {
+                  printWindow.print();
+                }
+              }
+            }}
+            className="w-8 h-8 text-white hover:bg-white/10"
+            title="Print PDF"
+          >
+            <Printer className="w-4 h-4" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setAnnotations([])}
+            className="w-8 h-8 text-white hover:bg-white/10"
+            title="Clear Annotations"
+          >
+            <Undo2 className="w-4 h-4" />
+          </Button>
+        </div>
+      )}
+
     </div>
   );
 }
