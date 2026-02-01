@@ -1,4 +1,4 @@
-export type AppRole = 'admin' | 'student';
+export type AppRole = 'admin' | 'student' | 'teacher';
 export type BookStatus = 'processing' | 'ready' | 'error';
 
 export interface Profile {
