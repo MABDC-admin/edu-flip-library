@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { TeacherLayout } from '@/components/teacher/TeacherLayout';
-import { GradeFilter, GradeGroup } from '@/components/teacher/GradeFilter';
+import { GradeFilter } from '@/components/teacher/GradeFilter';
 import { TeacherBookGrid } from '@/components/teacher/TeacherBookGrid';
 import { BookDetailsDialog } from '@/components/teacher/BookDetailsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,6 @@ export default function TeacherDashboard() {
   const { user, isTeacher, isAdmin, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [selectedGroup, setSelectedGroup] = useState<GradeGroup>('all');
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
   const [selectedBook, setSelectedBook] = useState<BookWithProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -82,45 +81,35 @@ export default function TeacherDashboard() {
   const isLoading = booksLoading;
 
   return (
-    <TeacherLayout title="eBook Library">
-      <div className="space-y-8">
-        {/* Header & Source Filter */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Library Catalog</h2>
-            <p className="text-slate-500 text-sm">Browse and manage learning resources by grade level</p>
-          </div>
-
-          <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
-            <span className="text-xs font-semibold text-slate-400 px-3 uppercase tracking-wider">Source:</span>
-            <Select
-              value={selectedSource}
-              onValueChange={(val: 'all' | 'internal' | 'quipper') => setSelectedSource(val)}
-            >
-              <SelectTrigger className="w-[160px] border-none bg-slate-50 font-medium h-9 rounded-xl">
-                <SelectValue placeholder="Source" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Content</SelectItem>
-                <SelectItem value="internal">Internal Library</SelectItem>
-                <SelectItem value="quipper">Quipper Content</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Global Grade Filter */}
+    <TeacherLayout>
+      <div className="space-y-6 -mt-4">
+        {/* Global Grade Filter & Source Select */}
         <Card className="border-none shadow-playful overflow-hidden bg-gradient-to-br from-white to-slate-50/50">
-          <CardHeader className="pb-4">
+          <CardHeader className="pb-4 flex flex-row items-center justify-between">
             <CardTitle className="text-lg flex items-center gap-2">
               <GraduationCap className="w-5 h-5 text-primary" />
               Switch Grade Level
             </CardTitle>
+
+            <div className="flex items-center gap-2 bg-slate-100/50 p-1 rounded-xl border border-slate-200">
+              <span className="text-[10px] font-bold text-slate-400 px-2 uppercase tracking-wider">Source:</span>
+              <Select
+                value={selectedSource}
+                onValueChange={(val: 'all' | 'internal' | 'quipper') => setSelectedSource(val)}
+              >
+                <SelectTrigger className="w-[130px] border-none bg-white font-medium h-7 rounded-lg text-xs">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Content</SelectItem>
+                  <SelectItem value="internal">Internal Library</SelectItem>
+                  <SelectItem value="quipper">Quipper Content</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </CardHeader>
           <CardContent>
             <GradeFilter
-              selectedGroup={selectedGroup}
-              onGroupChange={setSelectedGroup}
               selectedGrades={selectedGrades}
               onGradesChange={setSelectedGrades}
             />

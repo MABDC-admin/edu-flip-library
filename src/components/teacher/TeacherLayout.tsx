@@ -83,11 +83,6 @@ export function TeacherLayout({ children, title }: TeacherLayoutProps) {
 
       {/* Main content */}
       <main className="container mx-auto px-4 py-8">
-        {title && (
-          <div className="mb-8">
-            <h2 className="text-3xl font-display font-bold text-gradient">{title}</h2>
-          </div>
-        )}
         {children}
       </main>
     </div>
