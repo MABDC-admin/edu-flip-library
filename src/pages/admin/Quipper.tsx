@@ -61,7 +61,7 @@ export default function AdminQuipper() {
                 .from('books')
                 .select('*')
                 .eq('source', 'quipper') // Filter only Quipper
-                .order('created_at', { ascending: false });
+                .order('title', { ascending: true });
 
             if (error) throw error;
             return (data as any) as BookWithProgress[];
