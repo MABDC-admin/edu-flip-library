@@ -10,7 +10,7 @@ import { BookDetailsDialog } from '@/components/teacher/BookDetailsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookWithProgress, GRADE_LABELS } from '@/types/database';
-import { BookOpen, Users, TrendingUp, GraduationCap, Filter } from 'lucide-react';
+import { GraduationCap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function TeacherDashboard() {
@@ -34,7 +34,7 @@ export default function TeacherDashboard() {
     return null;
   }
 
-  // Fetch all books (teachers can see all)
+  // Fetch books
   const { data: books, isLoading: booksLoading } = useQuery({
     queryKey: ['teacher-books'],
     queryFn: async (): Promise<BookWithProgress[]> => {
@@ -46,40 +46,6 @@ export default function TeacherDashboard() {
 
       if (error) throw error;
       return ((data || []) as any) as BookWithProgress[];
-    },
-  });
-
-  // Fetch stats
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['teacher-stats'],
-    queryFn: async () => {
-      const [booksResult, studentsResult, progressResult] = await Promise.all([
-        (supabase.from('books') as any).select('id, grade_level, status, source'),
-        supabase.from('profiles').select('id, grade_level'),
-        supabase
-          .from('reading_progress')
-          .select('id, completed')
-          .eq('completed', true),
-      ]);
-
-      const allBooks = booksResult.data || [];
-      const students = studentsResult.data || [];
-      const completedBooks = progressResult.data || [];
-
-      // Group books by grade
-      const booksByGrade: Record<number, number> = {};
-      allBooks.forEach((b: any) => {
-        if (b.grade_level && b.status === 'ready') {
-          booksByGrade[b.grade_level] = (booksByGrade[b.grade_level] || 0) + 1;
-        }
-      });
-
-      return {
-        totalBooks: allBooks.filter((b: any) => b.status === 'ready').length,
-        totalStudents: students.length,
-        completedReads: completedBooks.length,
-        booksByGrade,
-      };
     },
   });
 
@@ -113,86 +79,29 @@ export default function TeacherDashboard() {
     setDialogOpen(true);
   };
 
-  const handleGradeSelect = (value: string) => {
-    if (value === 'all') {
-      setSelectedGroup('all');
-      setSelectedGrades([]);
-    } else {
-      const gradeNum = parseInt(value);
-      setSelectedGroup('all'); // Clear group selection
-      setSelectedGrades([gradeNum]);
-    }
-  };
-
-  const isLoading = booksLoading || statsLoading;
-
-  const statCards = [
-    {
-      title: 'Total Books',
-      value: stats?.totalBooks || 0,
-      icon: BookOpen,
-      color: 'bg-primary/10 text-primary',
-    },
-    {
-      title: 'Students',
-      value: stats?.totalStudents || 0,
-      icon: Users,
-      color: 'bg-success/10 text-success',
-    },
-    {
-      title: 'Books Completed',
-      value: stats?.completedReads || 0,
-      icon: TrendingUp,
-      color: 'bg-accent/10 text-accent',
-    },
-    {
-      title: 'Grades Covered',
-      value: Object.keys(stats?.booksByGrade || {}).length,
-      icon: GraduationCap,
-      color: 'bg-secondary/10 text-secondary',
-    },
-  ];
+  const isLoading = booksLoading;
 
   return (
     <TeacherLayout title="eBook Library">
       <div className="space-y-8">
-        {/* Quick Access Filter */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-slate-100 shadow-sm">
+        {/* Header & Source Filter */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <Filter className="w-4 h-4 text-primary" />
-              Quick Grade View
-            </h2>
-            <p className="text-xs text-muted-foreground">Jump directly to a specific grade level</p>
+            <h2 className="text-2xl font-bold text-slate-900">Library Catalog</h2>
+            <p className="text-slate-500 text-sm">Browse and manage learning resources by grade level</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Select
-              value={selectedGrades.length === 1 ? selectedGrades[0].toString() : 'all'}
-              onValueChange={handleGradeSelect}
-            >
-              <SelectTrigger className="w-[140px] bg-white">
-                <SelectValue placeholder="All Grades" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Grades</SelectItem>
-                {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
+          <div className="flex items-center gap-3 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
+            <span className="text-xs font-semibold text-slate-400 px-3 uppercase tracking-wider">Source:</span>
             <Select
               value={selectedSource}
               onValueChange={(val: 'all' | 'internal' | 'quipper') => setSelectedSource(val)}
             >
-              <SelectTrigger className="w-[140px] bg-white">
+              <SelectTrigger className="w-[160px] border-none bg-slate-50 font-medium h-9 rounded-xl">
                 <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="all">All Content</SelectItem>
                 <SelectItem value="internal">Internal Library</SelectItem>
                 <SelectItem value="quipper">Quipper Content</SelectItem>
               </SelectContent>
@@ -200,48 +109,13 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
-        {/* Visibility filters */}
-        <div className="flex items-center gap-2 mb-4">
-          <GradeFilter
-            selectedGroup={selectedGroup}
-            onGroupChange={setSelectedGroup}
-            selectedGrades={selectedGrades}
-            onGradesChange={setSelectedGrades}
-          />
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {isLoading
-            ? Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-20" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-12" />
-                </CardContent>
-              </Card>
-            ))
-            : statCards.map((stat, i) => (
-              <Card key={i} className="hover:shadow-card transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">
-                    {stat.title}
-                  </CardTitle>
-                  <div className={`p-2 rounded-lg ${stat.color}`}>
-                    <stat.icon className="w-4 h-4" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-2xl font-bold">{stat.value}</p>
-                </CardContent>
-              </Card>
-            ))}
-        </div>
-
-        {/* Grade Filter */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Filter by Grade Level</CardTitle>
+        {/* Global Grade Filter */}
+        <Card className="border-none shadow-playful overflow-hidden bg-gradient-to-br from-white to-slate-50/50">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary" />
+              Switch Grade Level
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <GradeFilter

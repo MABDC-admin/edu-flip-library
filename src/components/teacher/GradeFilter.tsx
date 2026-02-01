@@ -57,57 +57,68 @@ export function GradeFilter({
   };
 
   return (
-    <div className="space-y-4">
-      {/* Grade Group Buttons */}
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant={selectedGroup === 'all' ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => handleGroupClick('all')}
-          className={cn(selectedGroup === 'all' && 'gradient-primary')}
-        >
-          All Grades
-        </Button>
-        {(Object.keys(GRADE_GROUPS) as Array<keyof typeof GRADE_GROUPS>).map((group) => (
+    <div className="space-y-6 w-full">
+      {/* Quick Select Groups */}
+      <div className="flex flex-col gap-2">
+        <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          Range Select:
+        </span>
+        <div className="flex flex-wrap gap-2">
           <Button
-            key={group}
-            variant={selectedGroup === group ? 'default' : 'outline'}
+            variant={selectedGroup === 'all' && selectedGrades.length === 0 ? 'default' : 'outline'}
             size="sm"
-            onClick={() => handleGroupClick(group)}
-            className={cn(
-              selectedGroup === group && 'border-2',
-              gradeGroupColors[group]
-            )}
+            onClick={() => handleGroupClick('all')}
+            className={cn(selectedGroup === 'all' && selectedGrades.length === 0 && 'gradient-primary')}
           >
-            Grades {group}
+            All Grades
           </Button>
-        ))}
+          {(Object.keys(GRADE_GROUPS) as Array<keyof typeof GRADE_GROUPS>).map((group) => {
+            const isGroupActive = selectedGroup === group;
+            return (
+              <Button
+                key={group}
+                variant={isGroupActive ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleGroupClick(group)}
+                className={cn(
+                  isGroupActive && 'border-2',
+                  gradeGroupColors[group]
+                )}
+              >
+                Grades {group}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Individual Grade Chips */}
-      {selectedGroup !== 'all' && (
-        <div className="flex flex-wrap gap-2 pt-2 border-t">
-          <span className="text-sm text-muted-foreground self-center mr-2">
-            Fine-tune:
-          </span>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((grade) => (
-            <Button
-              key={grade}
-              variant={selectedGrades.includes(grade) ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => handleGradeToggle(grade)}
-              className={cn(
-                "h-8 px-3 rounded-full text-xs font-medium transition-all",
-                selectedGrades.includes(grade)
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted/50 hover:bg-muted"
-              )}
-            >
-              {GRADE_LABELS[grade]}
-            </Button>
-          ))}
+      {/* Individual Grade Switcher - ALWAYS VISIBLE */}
+      <div className="space-y-3">
+        <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          Select Grade Level:
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((grade) => {
+            const isActive = selectedGrades.includes(grade);
+            return (
+              <Button
+                key={grade}
+                variant={isActive ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => handleGradeToggle(grade)}
+                className={cn(
+                  "h-10 px-4 rounded-xl text-sm font-semibold transition-all shadow-sm border",
+                  isActive
+                    ? "bg-primary text-primary-foreground border-primary scale-105"
+                    : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600"
+                )}
+              >
+                {GRADE_LABELS[grade]}
+              </Button>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
