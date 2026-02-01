@@ -30,7 +30,7 @@ export function TeacherLayout({ children, title }: TeacherLayoutProps) {
             </div>
             <div>
               <h1 className="font-display font-bold text-xl text-gradient">Teacher Portal</h1>
-              <p className="text-xs text-muted-foreground">EduFlip Library</p>
+              <p className="text-xs text-muted-foreground">MABDC Library</p>
             </div>
           </div>
 

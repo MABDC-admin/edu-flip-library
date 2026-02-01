@@ -34,7 +34,7 @@ export default function Bookshelf() {
               <BookOpen className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-display font-bold text-xl text-gradient">EduFlip</h1>
+              <h1 className="font-display font-bold text-xl text-gradient">MABDC</h1>
               <p className="text-xs text-muted-foreground">Library</p>
             </div>
           </div>

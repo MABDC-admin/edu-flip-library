@@ -22,8 +22,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
       manifest: {
-        name: "EduFlip Library",
-        short_name: "EduFlip",
+        name: "MABDC Library",
+        short_name: "MABDC",
         description: "Interactive 3D Flipbooks for K-12",
         theme_color: "#3b82f6",
         icons: [

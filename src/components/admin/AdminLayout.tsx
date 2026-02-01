@@ -87,8 +87,8 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
                 <BookOpen className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="font-display font-bold text-xl text-gradient">EduFlip</h1>
-                <p className="text-xs text-muted-foreground">Admin Panel</p>
+                <h1 className="font-display font-bold text-xl text-gradient">MABDC</h1>
+                <p className="text-[10px] text-muted-foreground leading-none">Library Admin</p>
               </div>
             </Link>
           </div>
