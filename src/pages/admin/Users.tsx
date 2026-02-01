@@ -8,7 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Loader2, Shield, UserCog, GraduationCap, Trash2, KeyRound } from 'lucide-react';
+import { Loader2, Shield, UserCog, GraduationCap, Trash2, KeyRound, Filter } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { GRADE_LABELS } from '@/types/database';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +27,7 @@ export default function AdminUsers() {
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
     const [newPassword, setNewPassword] = useState('');
+    const [filterGrade, setFilterGrade] = useState<string>('all');
 
     const queryClient = useQueryClient();
     const { toast } = useToast();
@@ -52,6 +55,11 @@ export default function AdminUsers() {
     const getUserRoles = (userId: string) => {
         return roles?.filter(r => r.user_id === userId).map(r => r.role) || [];
     };
+
+    const filteredProfiles = profiles?.filter(user => {
+        if (filterGrade === 'all') return true;
+        return user.grade_level === parseInt(filterGrade);
+    }) || [];
 
     const handleEditClick = (user: Profile) => {
         setEditingUser(user);
@@ -138,6 +146,23 @@ export default function AdminUsers() {
 
     return (
         <AdminLayout title="Manage Users">
+            <div className="flex justify-end mb-4">
+                <Select value={filterGrade} onValueChange={setFilterGrade}>
+                    <SelectTrigger className="w-[180px] bg-white">
+                        <Filter className="w-4 h-4 mr-2" />
+                        <SelectValue placeholder="All Grades" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Grades</SelectItem>
+                        {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>
+                                {label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
             <Card>
                 <CardContent className="p-0">
                     <Table>
@@ -152,7 +177,9 @@ export default function AdminUsers() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow><TableCell colSpan={4} className="text-center py-8"><Loader2 className="animate-spin h-8 w-8 mx-auto" /></TableCell></TableRow>
-                            ) : profiles?.map((user) => (
+                            ) : filteredProfiles.length === 0 ? (
+                                <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No users found</TableCell></TableRow>
+                            ) : filteredProfiles.map((user) => (
                                 <TableRow key={user.id}>
                                     <TableCell className="font-medium">{user.name}</TableCell>
                                     <TableCell>{user.grade_level}</TableCell>
