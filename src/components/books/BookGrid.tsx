@@ -9,22 +9,26 @@ interface BookGridProps {
   title?: string;
   emptyMessage?: string;
   showSearch?: boolean;
+  externalSearchQuery?: string;
 }
 
-export function BookGrid({ 
-  books, 
-  title, 
+export function BookGrid({
+  books,
+  title,
   emptyMessage = "No books found",
-  showSearch = false 
+  showSearch = false,
+  externalSearchQuery
 }: BookGridProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  const filteredBooks = searchQuery
-    ? books.filter((book) => 
-        book.title.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+
+  const query = showSearch ? internalSearchQuery : (externalSearchQuery || '');
+
+  const filteredBooks = query
+    ? books.filter((book) =>
+      book.title.toLowerCase().includes(query.toLowerCase())
+    )
     : books;
-  
+
   return (
     <div className="space-y-6">
       {(title || showSearch) && (
@@ -34,27 +38,27 @@ export function BookGrid({
               {title}
             </h2>
           )}
-          
+
           {showSearch && (
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 type="search"
                 placeholder="Search books..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={internalSearchQuery}
+                onChange={(e) => setInternalSearchQuery(e.target.value)}
                 className="pl-9"
               />
             </div>
           )}
         </div>
       )}
-      
+
       {filteredBooks.length > 0 ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
           {filteredBooks.map((book, index) => (
-            <BookCard 
-              key={book.id} 
+            <BookCard
+              key={book.id}
               book={book}
               className="opacity-0"
               style={{ animationDelay: `${index * 50}ms` } as React.CSSProperties}
@@ -67,7 +71,7 @@ export function BookGrid({
             <BookOpen className="w-10 h-10 text-muted-foreground" />
           </div>
           <p className="text-lg text-muted-foreground">{emptyMessage}</p>
-          {searchQuery && (
+          {query && (
             <p className="text-sm text-muted-foreground mt-2">
               Try a different search term
             </p>
