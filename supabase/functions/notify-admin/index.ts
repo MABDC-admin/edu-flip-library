@@ -24,6 +24,8 @@ serve(async (req) => {
         return new Response("ok", { headers: corsHeaders });
     }
 
+    console.log(`API Key detected: ${!!RESEND_API_KEY} (length: ${RESEND_API_KEY?.length || 0})`);
+
     try {
         const body = await req.json() as RequestBody;
         console.log("Request body:", JSON.stringify(body));
