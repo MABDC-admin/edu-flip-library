@@ -22,6 +22,7 @@ interface AdminLayoutProps {
 const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/books', label: 'Manage Books', icon: BookOpen },
+  { href: '/admin/quipper', label: 'Quipper Modules', icon: Library },
   { href: '/admin/students', label: 'Students', icon: Users },
   { href: '/admin/users', label: 'Manage Roles', icon: Shield },
 ];

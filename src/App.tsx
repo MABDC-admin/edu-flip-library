@@ -12,6 +12,7 @@ import AdminBooks from "./pages/admin/Books";
 // Fix Users.tsx role casting
 import AdminStudents from "./pages/admin/Students";
 import AdminUsers from "./pages/admin/Users";
+import AdminQuipper from "./pages/admin/Quipper";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/admin/books" element={<AdminBooks />} />
             <Route path="/admin/students" element={<AdminStudents />} />
             <Route path="/admin/users" element={<AdminUsers />} />
+            <Route path="/admin/quipper" element={<AdminQuipper />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

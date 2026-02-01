@@ -29,6 +29,7 @@ CREATE TABLE public.books (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
   grade_level INT NOT NULL CHECK (grade_level >= 1 AND grade_level <= 12),
+  subject TEXT, -- Added subject column
   cover_url TEXT,
   pdf_url TEXT,
   page_count INT DEFAULT 0,

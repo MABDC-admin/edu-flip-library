@@ -22,6 +22,7 @@ export interface Book {
   id: string;
   title: string;
   grade_level: number;
+  subject?: string | null;
   cover_url: string | null;
   pdf_url: string | null;
   page_count: number;
@@ -82,3 +83,15 @@ export const GRADE_COLORS: Record<number, string> = {
   11: 'bg-grade-11',
   12: 'bg-grade-12',
 };
+
+export const SUBJECT_LABELS = [
+  'Math',
+  'Science',
+  'English',
+  'Filipino',
+  'Araling Panlipunan',
+  'MAPEH',
+  'TLE',
+  'ESP',
+  'Computer'
+] as const;
