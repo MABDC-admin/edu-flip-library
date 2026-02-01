@@ -51,7 +51,7 @@ export default function AdminBooks() {
   const [isTeacherOnly, setIsTeacherOnly] = useState(false);
   const [bulkSource, setBulkSource] = useState<'internal' | 'quipper'>('internal');
   const [bulkIsTeacherOnly, setBulkIsTeacherOnly] = useState(false);
-  const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('internal');
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -72,7 +72,7 @@ export default function AdminBooks() {
   const filteredBooks = books?.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesGrade = filterGrade === 'all' || book.grade_level === parseInt(filterGrade);
-    const matchesSource = filterSource === 'all' || book.source === filterSource;
+    const matchesSource = book.source === filterSource;
     return matchesSearch && matchesGrade && matchesSource;
   });
 
@@ -380,10 +380,9 @@ export default function AdminBooks() {
 
             <Select value={filterSource} onValueChange={setFilterSource}>
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="All Sources" />
+                <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
                 <SelectItem value="internal">Internal</SelectItem>
                 <SelectItem value="quipper">Quipper</SelectItem>
               </SelectContent>

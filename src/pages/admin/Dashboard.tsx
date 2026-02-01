@@ -13,7 +13,7 @@ import { GRADE_LABELS } from '@/types/database';
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filterGrade, setFilterGrade] = useState<string>('all');
-  const [filterSource, setFilterSource] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('internal');
 
   // Fetch stats
   const { data: stats, isLoading } = useQuery({
@@ -60,9 +60,7 @@ export default function AdminDashboard() {
       filteredBooks = filteredBooks.filter((b: any) => b.grade_level === gradeNum);
     }
 
-    if (filterSource !== 'all') {
-      filteredBooks = filteredBooks.filter((b: any) => b.source === filterSource);
-    }
+    filteredBooks = filteredBooks.filter((b: any) => b.source === filterSource);
 
     const gradeNum = filterGrade === 'all' ? null : parseInt(filterGrade);
     const filteredStudentsCount = gradeNum ? (stats.studentsByGrade[gradeNum] || 0) : stats.students.length;
@@ -124,10 +122,9 @@ export default function AdminDashboard() {
             <Select value={filterSource} onValueChange={setFilterSource}>
               <SelectTrigger className="w-full sm:w-[160px] bg-white">
                 <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="All Sources" />
+                <SelectValue placeholder="Source" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Sources</SelectItem>
                 <SelectItem value="internal">Internal Library</SelectItem>
                 <SelectItem value="quipper">Quipper Library</SelectItem>
               </SelectContent>

@@ -20,7 +20,7 @@ export default function TeacherDashboard() {
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
   const [selectedBook, setSelectedBook] = useState<BookWithProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedSource, setSelectedSource] = useState<'all' | 'internal' | 'quipper'>('all');
+  const [selectedSource, setSelectedSource] = useState<'internal' | 'quipper'>('internal');
 
   // Redirect if not authenticated or not a teacher/admin
   if (!authLoading && !user) {
@@ -55,9 +55,7 @@ export default function TeacherDashboard() {
     if (selectedGrades.length > 0) {
       filtered = filtered.filter((book) => selectedGrades.includes(book.grade_level));
     }
-    if (selectedSource !== 'all') {
-      filtered = filtered.filter((book) => book.source === selectedSource);
-    }
+    filtered = filtered.filter((book) => book.source === selectedSource);
     return filtered;
   }, [books, selectedGrades, selectedSource]);
 
@@ -101,13 +99,12 @@ export default function TeacherDashboard() {
               <span className="text-[10px] font-bold text-slate-400 px-2 uppercase tracking-wider">Source:</span>
               <Select
                 value={selectedSource}
-                onValueChange={(val: 'all' | 'internal' | 'quipper') => setSelectedSource(val)}
+                onValueChange={(val: 'internal' | 'quipper') => setSelectedSource(val)}
               >
                 <SelectTrigger className="w-[130px] border-none bg-white font-medium h-7 rounded-lg text-xs">
                   <SelectValue placeholder="Source" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Content</SelectItem>
                   <SelectItem value="internal">Internal Library</SelectItem>
                   <SelectItem value="quipper">Quipper Content</SelectItem>
                 </SelectContent>
