@@ -591,7 +591,6 @@ export default function AdminBooks() {
                       <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
                     </div>
                   )}
-                  <p className="text-[10px] text-muted-foreground mt-1">{book.page_count} pages</p>
                 </div>
               </Card>
             ))}
