@@ -11,7 +11,7 @@ const corsHeaders = {
 };
 
 interface RequestBody {
-    type: "login" | "read" | "test";
+    type: "login" | "read" | "test" | "registration";
     user_email: string;
     user_role: string;
     book_title?: string;
@@ -39,6 +39,9 @@ serve(async (req) => {
         if (type === "login") {
             subject = `[MABDC Admin] User Login: ${user_email}`;
             html = `<h2>User Login Alert</h2><p><strong>User:</strong> ${user_email}</p><p><strong>Role:</strong> ${user_role}</p><p><strong>Time:</strong> ${timestamp}</p>`;
+        } else if (type === "registration") {
+            subject = `[MABDC Admin] New Registration: ${user_email}`;
+            html = `<h2>New User Registered</h2><p><strong>User:</strong> ${user_email}</p><p><strong>Role:</strong> ${user_role}</p><p><strong>Time:</strong> ${timestamp}</p>`;
         } else if (type === "read") {
             subject = `[MABDC Admin] Book Accessed: ${book_title}`;
             html = `<h2>Book Reading Alert</h2><p><strong>User:</strong> ${user_email}</p><p><strong>Role:</strong> ${user_role}</p><p><strong>Book:</strong> ${book_title}</p><p><strong>Time:</strong> ${timestamp}</p>`;

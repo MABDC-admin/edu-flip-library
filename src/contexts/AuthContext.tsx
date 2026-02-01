@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, name: string, gradeLevel?: number) => {
     const redirectUrl = `${window.location.origin}/`;
 
-    const { error } = await supabase.auth.signUp({
+    const { error, data: sessionData } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -140,6 +140,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       },
     });
+
+    if (!error && sessionData?.user) {
+      console.log(`[Auth] New registration: ${email}. Notifying admin...`);
+      supabase.functions.invoke('notify-admin', {
+        body: {
+          type: 'registration',
+          user_email: email,
+          user_role: 'student', // Default for signups
+        }
+      });
+    }
+
     return { error: error as Error | null };
   };
 

@@ -8,7 +8,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GRADE_LABELS } from '@/types/database';
 
