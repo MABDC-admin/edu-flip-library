@@ -77,7 +77,7 @@ export default function FlipbookReader() {
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [zoom, setZoom] = useState(1);
+  const [zoom, setZoom] = useState(1.75);
   const [viewMode, setViewMode] = useState<'single' | 'double'>('single');
   const [flipbookDimensions, setFlipbookDimensions] = useState({ width: 400, height: 566 });
   const containerRef = useRef<HTMLDivElement>(null);
