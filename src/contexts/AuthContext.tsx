@@ -106,13 +106,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id).single();
         const role = roleData?.role || 'student';
 
-        await supabase.functions.invoke('notify-admin', {
+        console.log('SignIn successful, invoking notify-admin...', { email, role });
+        const { data, error: invokeError } = await supabase.functions.invoke('notify-admin', {
           body: {
             type: 'login',
             user_email: email,
             user_role: role,
           }
         });
+
+        if (invokeError) {
+          console.error('Failed to invoke notify-admin on login:', invokeError);
+        } else {
+          console.log('notify-admin response:', data);
+        }
       }
     }
     return { error: error as Error | null };
