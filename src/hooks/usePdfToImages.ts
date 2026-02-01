@@ -28,7 +28,7 @@ export function usePdfToImages() {
   });
 
   const processInBrowser = useCallback(
-    async (bookId: string, pdfFile: File): Promise<number> => {
+    async (bookId: string, pdfFile: File): Promise<{ numPages: number; firstPageUrl: string }> => {
       const arrayBuffer = await pdfFile.arrayBuffer();
       const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
       const pdfDocument = await loadingTask.promise;
@@ -40,7 +40,7 @@ export function usePdfToImages() {
       await supabase.from("book_pages").delete().eq("book_id", bookId);
 
       const BATCH_SIZE = 3; // Process 3 pages at a time to stay responsive
-      
+
       for (let i = 1; i <= numPages; i += BATCH_SIZE) {
         const batchEnd = Math.min(i + BATCH_SIZE - 1, numPages);
         const batchPromises = [];
@@ -48,7 +48,7 @@ export function usePdfToImages() {
         for (let pageNum = i; pageNum <= batchEnd; pageNum++) {
           batchPromises.push((async (pNum) => {
             const page = await pdfDocument.getPage(pNum);
-            
+
             // 1. Render High-Res PNG (Scale 2.0)
             const viewport = page.getViewport({ scale: 2.0 });
             const canvas = document.createElement("canvas");
@@ -114,8 +114,10 @@ export function usePdfToImages() {
       // Cleanup pdf.js resources
       pdfDocument.destroy();
 
+      const { data: { publicUrl: firstPageUrl } } = supabase.storage.from("book-pages").getPublicUrl(`${bookId}/page-1.png`);
+
       setProgress((p) => ({ ...p, status: "done" }));
-      return numPages;
+      return { numPages, firstPageUrl };
     },
     []
   );

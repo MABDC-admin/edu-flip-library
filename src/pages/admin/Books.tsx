@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2 } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -39,6 +39,13 @@ export default function AdminBooks() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [bulkFiles, setBulkFiles] = useState<File[]>([]);
+  const [bulkGrade, setBulkGrade] = useState<number>(1);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
+  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
+  const [tempTitle, setTempTitle] = useState('');
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -87,81 +94,58 @@ export default function AdminBooks() {
 
   const { progress: pdfProgress, processInBrowser, reset: resetPdfProgress } = usePdfToImages();
 
+  const uploadSingleBook = async (title: string, grade: number, pdf: File, cover: File | null) => {
+    // 1. Create book record
+    const { data: book, error: bookError } = await supabase
+      .from('books')
+      .insert({
+        title,
+        grade_level: grade,
+        status: 'processing',
+        page_count: 0,
+      })
+      .select()
+      .single();
+
+    if (bookError) throw bookError;
+    const bookId = book.id;
+
+    // 2. Upload PDF
+    const pdfPath = `${bookId}/source.pdf`;
+    const { error: pdfUploadError } = await supabase.storage
+      .from('pdf-uploads')
+      .upload(pdfPath, pdf);
+    if (pdfUploadError) throw pdfUploadError;
+
+    let coverUrl = null;
+    // 3. Upload Cover
+    if (cover) {
+      const coverPath = `${bookId}/cover.png`;
+      await supabase.storage.from('book-covers').upload(coverPath, cover);
+      coverUrl = supabase.storage.from('book-covers').getPublicUrl(coverPath).data.publicUrl;
+    }
+
+    // 4. Update PDF URL
+    await supabase.from('books').update({ pdf_url: pdfPath }).eq('id', bookId);
+
+    // 5. Process Pages and get automated cover
+    const { numPages, firstPageUrl } = await processInBrowser(bookId, pdf);
+
+    // 6. Final Update: status, total pages, and cover (if none provided)
+    await supabase.from('books').update({
+      page_count: numPages,
+      status: 'ready',
+      cover_url: coverUrl || firstPageUrl, // Use first page if manual cover is missing
+    }).eq('id', bookId);
+
+    return book;
+  };
+
   const createBook = useMutation({
     mutationFn: async ({ title, gradeLevel, pdfFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File; coverFile: File | null }) => {
       setIsUploading(true);
       try {
-        // 1. Create book record first to get ID
-        const { data: book, error: bookError } = await supabase
-          .from('books')
-          .insert({
-            title,
-            grade_level: gradeLevel,
-            status: 'processing',
-            page_count: 0,
-          })
-          .select()
-          .single();
-
-        if (bookError) throw bookError;
-
-        const bookId = book.id;
-        let pdfUrl = null;
-        let coverUrl = null;
-
-        // 2. Upload PDF
-        const pdfPath = `${bookId}/source.pdf`;
-        const { error: pdfUploadError } = await supabase.storage
-          .from('pdf-uploads')
-          .upload(pdfPath, pdfFile);
-
-        if (pdfUploadError) throw pdfUploadError;
-        pdfUrl = pdfPath;
-
-        // 3. Upload Cover (if provided)
-        if (coverFile) {
-          const coverPath = `${bookId}/cover.png`;
-          const { error: coverUploadError } = await supabase.storage
-            .from('book-covers')
-            .upload(coverPath, coverFile);
-
-          if (coverUploadError) throw coverUploadError;
-
-          const { data: { publicUrl } } = supabase.storage
-            .from('book-covers')
-            .getPublicUrl(coverPath);
-
-          coverUrl = publicUrl;
-        }
-
-        // 4. Update book record with URLs
-        const { error: updateError } = await supabase
-          .from('books')
-          .update({
-            pdf_url: pdfUrl,
-            cover_url: coverUrl,
-          })
-          .eq('id', bookId);
-
-        if (updateError) throw updateError;
-
-        // 5. Render pages in-browser using Canvas + upload to storage
-        const pageCount = await processInBrowser(bookId, pdfFile);
-
-        // 6. Mark book as ready
-        const { error: finalUpdateError } = await supabase
-          .from('books')
-          .update({
-            page_count: pageCount,
-            status: 'ready',
-          })
-          .eq('id', bookId);
-
-        if (finalUpdateError) throw finalUpdateError;
-
-        toast({ title: 'Book uploaded & processed! 🚀' });
-
-        return book;
+        return await uploadSingleBook(title, gradeLevel, pdfFile, coverFile);
       } finally {
         setIsUploading(false);
       }
@@ -171,20 +155,38 @@ export default function AdminBooks() {
       setIsDialogOpen(false);
       resetForm();
       resetPdfProgress();
-      toast({
-        title: 'Book uploaded! 📚',
-        description: 'All pages have been processed.',
-      });
+      toast({ title: 'Book uploaded! 📚' });
     },
     onError: (error) => {
       resetPdfProgress();
-      toast({
-        title: 'Upload failed',
-        description: error.message,
-        variant: 'destructive',
-      });
+      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
     },
   });
+
+  const handleBulkUpload = async () => {
+    if (bulkFiles.length === 0) return;
+    setIsUploading(true);
+    setBulkProgress({ done: 0, total: bulkFiles.length, currentTitle: '' });
+
+    for (let i = 0; i < bulkFiles.length; i++) {
+      const file = bulkFiles[i];
+      const title = file.name.replace(/\.[^/.]+$/, ""); // Strip extension
+      setBulkProgress(p => ({ ...p, currentTitle: title }));
+
+      try {
+        await uploadSingleBook(title, bulkGrade, file, null);
+        setBulkProgress(p => ({ ...p, done: i + 1 }));
+      } catch (err) {
+        toast({ title: `Failed: ${title}`, variant: 'destructive' });
+      }
+    }
+
+    setIsUploading(false);
+    setIsBulkOpen(false);
+    setBulkFiles([]);
+    queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+    toast({ title: 'Bulk upload complete! 🚀' });
+  };
 
   const resetForm = () => {
     setTitle('');
@@ -297,241 +299,407 @@ export default function AdminBooks() {
               </SelectContent>
             </Select>
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="gradient-primary" onClick={resetForm}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Book
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Add New Book</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="title">Book Title</Label>
-                    <Input
-                      id="title"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                      placeholder="Enter book title"
-                      className={errors.title ? 'border-destructive' : ''}
-                    />
-                    {errors.title && (
-                      <p className="text-sm text-destructive">{errors.title}</p>
-                    )}
-                  </div>
+            <div className="flex bg-muted rounded-lg p-1">
+              <Button
+                variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+                size="icon"
+                onClick={() => setViewMode('table')}
+                className="w-9 h-9"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                size="icon"
+                onClick={() => setViewMode('grid')}
+                className="w-9 h-9"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+            </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+            <div className="flex gap-2">
+              <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Upload className="w-4 h-4 mr-2" />
+                    Bulk Upload
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                  <DialogHeader>
+                    <DialogTitle>Bulk Upload PDFs</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
                     <div className="space-y-2">
-                      <Label htmlFor="grade">Grade Level</Label>
+                      <Label>Grade Level (for all books)</Label>
                       <Select
-                        value={gradeLevel.toString()}
-                        onValueChange={(value) => setGradeLevel(parseInt(value))}
+                        value={bulkGrade.toString()}
+                        onValueChange={(val) => setBulkGrade(parseInt(val))}
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder="Select" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                            <SelectItem key={value} value={value}>
-                              {label}
-                            </SelectItem>
+                          {Object.entries(GRADE_LABELS).map(([v, l]) => (
+                            <SelectItem key={v} value={v}>{l}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="cover">Cover Image (Optional)</Label>
-                      <div className="relative">
-                        <Input
-                          id="cover"
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
-                          className="text-xs"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="pdf">Course PDF File</Label>
-                    <div className={cn(
-                      "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                      pdfFile ? "border-primary/50 bg-primary/5" : "border-slate-200 hover:border-primary/30"
-                    )}>
+                    <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                       <input
-                        id="pdf"
                         type="file"
+                        multiple
                         accept=".pdf"
-                        onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                        onChange={(e) => setBulkFiles(Array.from(e.target.files || []))}
                         className="hidden"
+                        id="bulk-pdf"
                       />
-                      <label htmlFor="pdf" className="cursor-pointer">
-                        <Upload className={cn("w-8 h-8 mx-auto mb-2", pdfFile ? "text-primary" : "text-muted-foreground")} />
-                        {pdfFile ? (
-                          <div className="space-y-1">
-                            <p className="text-sm font-medium text-primary line-clamp-1">{pdfFile.name}</p>
-                            <p className="text-xs text-muted-foreground">{(pdfFile.size / (1024 * 1024)).toFixed(2)} MB</p>
-                          </div>
-                        ) : (
-                          <>
-                            <p className="text-sm font-medium">Click to upload PDF</p>
-                            <p className="text-xs text-muted-foreground">Max file size 200MB</p>
-                          </>
-                        )}
+                      <label htmlFor="bulk-pdf" className="cursor-pointer">
+                        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+                        <p className="text-sm font-medium">Click to select multiple PDFs</p>
+                        <p className="text-xs text-muted-foreground">{bulkFiles.length} files selected</p>
                       </label>
                     </div>
-                    {errors.pdf && (
-                      <p className="text-sm text-destructive">{errors.pdf}</p>
-                    )}
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-4">
                     <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsDialogOpen(false)}
-                      disabled={isUploading}
+                      onClick={handleBulkUpload}
+                      disabled={isUploading || bulkFiles.length === 0}
+                      className="w-full gradient-primary"
                     >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={createBook.isPending || isUploading}
-                      className="gradient-primary min-w-[120px]"
-                    >
-                      {createBook.isPending || isUploading ? (
-                        <div className="flex flex-col gap-1 items-center w-full">
-                          <div className="flex items-center gap-2">
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            {pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering'
-                              ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
-                              : 'Uploading...'}
-                          </div>
-                          {pdfProgress.total > 0 && (
-                            <Progress
-                              value={(pdfProgress.done / pdfProgress.total) * 100}
-                              className="h-2 w-full"
-                            />
-                          )}
+                      {isUploading ? (
+                        <div className="flex flex-col gap-1 items-center">
+                          <span className="text-xs">Processing {bulkProgress.done}/{bulkProgress.total}</span>
+                          <span className="text-[10px] opacity-70 truncate max-w-[200px]">{bulkProgress.currentTitle}</span>
                         </div>
                       ) : (
-                        'Upload & Create'
+                        `Upload ${bulkFiles.length} Books`
                       )}
                     </Button>
                   </div>
-                </form>
-              </DialogContent>
-            </Dialog>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="gradient-primary" onClick={resetForm}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Book
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px]">
+                  <DialogHeader>
+                    <DialogTitle>Add New Book</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="title">Book Title</Label>
+                      <Input
+                        id="title"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Enter book title"
+                        className={errors.title ? 'border-destructive' : ''}
+                      />
+                      {errors.title && (
+                        <p className="text-sm text-destructive">{errors.title}</p>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="grade">Grade Level</Label>
+                        <Select
+                          value={gradeLevel.toString()}
+                          onValueChange={(value) => setGradeLevel(parseInt(value))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="cover">Cover Image (Optional)</Label>
+                        <div className="relative">
+                          <Input
+                            id="cover"
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setCoverFile(e.target.files?.[0] || null)}
+                            className="text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pdf">Course PDF File</Label>
+                      <div className={cn(
+                        "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+                        pdfFile ? "border-primary/50 bg-primary/5" : "border-slate-200 hover:border-primary/30"
+                      )}>
+                        <input
+                          id="pdf"
+                          type="file"
+                          accept=".pdf"
+                          onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                          className="hidden"
+                        />
+                        <label htmlFor="pdf" className="cursor-pointer">
+                          <Upload className={cn("w-8 h-8 mx-auto mb-2", pdfFile ? "text-primary" : "text-muted-foreground")} />
+                          {pdfFile ? (
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium text-primary line-clamp-1">{pdfFile.name}</p>
+                              <p className="text-xs text-muted-foreground">{(pdfFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="text-sm font-medium">Click to upload PDF</p>
+                              <p className="text-xs text-muted-foreground">Max file size 200MB</p>
+                            </>
+                          )}
+                        </label>
+                      </div>
+                      {errors.pdf && (
+                        <p className="text-sm text-destructive">{errors.pdf}</p>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-4">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsDialogOpen(false)}
+                        disabled={isUploading}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={createBook.isPending || isUploading}
+                        className="gradient-primary min-w-[120px]"
+                      >
+                        {createBook.isPending || isUploading ? (
+                          <div className="flex flex-col gap-1 items-center w-full">
+                            <div className="flex items-center gap-2">
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              {pdfProgress.status === 'idle' || pdfProgress.status === 'uploading' || pdfProgress.status === 'rendering'
+                                ? `Processing ${pdfProgress.done}/${pdfProgress.total || '...'} pages`
+                                : 'Uploading...'}
+                            </div>
+                            {pdfProgress.total > 0 && (
+                              <Progress
+                                value={(pdfProgress.done / pdfProgress.total) * 100}
+                                className="h-2 w-full"
+                              />
+                            )}
+                          </div>
+                        ) : (
+                          'Upload & Create'
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mt-2">
             {books?.length || 0} books in library
           </p>
         </div>
 
-        {/* Books table */}
-        <Card>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-6 space-y-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Skeleton key={i} className="h-12" />
-                ))}
-              </div>
-            ) : books && books.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Grade</TableHead>
-                    <TableHead>Pages</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="w-[100px]">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredBooks?.map((book) => (
-                    <TableRow key={book.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-                            <BookOpen className="w-4 h-4 text-primary" />
-                          </div>
-                          {book.title}
-                        </div>
-                      </TableCell>
-                      <TableCell>{GRADE_LABELS[book.grade_level] || 'N/A'}</TableCell>
-                      <TableCell>{book.page_count}</TableCell>
-                      <TableCell>{getStatusBadge(book.status)}</TableCell>
-                      <TableCell className="text-muted-foreground text-xs">
-                        {new Date(book.created_at).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditingBook(book);
-                              setTitle(book.title);
-                              setGradeLevel(book.grade_level);
-                              setIsEditOpen(true);
-                            }}
-                            title="Edit Book"
-                            className="text-accent hover:bg-accent/10"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => navigate(`/read/${book.id}`)}
-                            title="View Flipbook"
-                            className="text-primary hover:bg-primary/10"
-                          >
-                            <BookOpen className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => deleteBook.mutate(book.id)}
-                            disabled={deleteBook.isPending}
-                            title="Delete Book"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
+        {/* Books display */}
+        {isLoading ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <Skeleton key={i} className="aspect-[3/4] rounded-xl" />
+            ))}
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {filteredBooks?.map((book) => (
+              <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
+                <div className="aspect-[3/4] relative bg-slate-100">
+                  {book.cover_url ? (
+                    <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                      <BookOpen className="w-12 h-12" />
+                    </div>
+                  )}
+                  <div className="absolute top-2 left-2 flex gap-1">
+                    {getStatusBadge(book.status)}
+                    <Badge variant="secondary" className="bg-white/90 text-[10px]">{GRADE_LABELS[book.grade_level]}</Badge>
+                  </div>
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                    <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
+                      <BookOpen className="w-4 h-4" />
+                    </Button>
+                    <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="p-3">
+                  {editingTitleId === book.id ? (
+                    <div className="flex items-center gap-1">
+                      <Input
+                        value={tempTitle}
+                        onChange={(e) => setTempTitle(e.target.value)}
+                        className="h-8 text-sm"
+                        autoFocus
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-success"
+                        onClick={() => {
+                          updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
+                          setEditingTitleId(null);
+                        }}
+                      >
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 text-destructive"
+                        onClick={() => setEditingTitleId(null)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      className="flex items-center justify-between cursor-pointer group/title"
+                      onClick={() => {
+                        setEditingTitleId(book.id);
+                        setTempTitle(book.title);
+                      }}
+                    >
+                      <h3 className="font-semibold text-sm truncate pr-2">{book.title}</h3>
+                      <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
+                    </div>
+                  )}
+                  <p className="text-[10px] text-muted-foreground mt-1">{book.page_count} pages</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="p-0">
+              {books && books.length > 0 ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Pages</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="p-12 text-center">
-                <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No books found</h3>
-                <p className="text-muted-foreground mb-4">
-                  {searchQuery || filterGrade !== 'all'
-                    ? "Try adjusting your filters to find what you're looking for"
-                    : "Start by adding your first book to the library"}
-                </p>
-                {!searchQuery && filterGrade === 'all' && (
-                  <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
+                  </TableHeader>
+                  <TableBody>
+                    {filteredBooks?.map((book) => (
+                      <TableRow key={book.id}>
+                        <TableCell className="font-medium">
+                          {editingTitleId === book.id ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={tempTitle}
+                                onChange={(e) => setTempTitle(e.target.value)}
+                                className="h-8 w-48"
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
+                                  setEditingTitleId(null);
+                                }}
+                              >
+                                <Check className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3 group/title cursor-pointer" onClick={() => { setEditingTitleId(book.id); setTempTitle(book.title); }}>
+                              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+                                <BookOpen className="w-4 h-4 text-primary" />
+                              </div>
+                              {book.title}
+                              <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>{GRADE_LABELS[book.grade_level] || 'N/A'}</TableCell>
+                        <TableCell>{book.page_count}</TableCell>
+                        <TableCell>{getStatusBadge(book.status)}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          {new Date(book.created_at).toLocaleDateString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingBook(book);
+                                setTitle(book.title);
+                                setGradeLevel(book.grade_level);
+                                setIsEditOpen(true);
+                              }}
+                              className="text-accent"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => navigate(`/read/${book.id}`)}
+                              className="text-primary"
+                            >
+                              <BookOpen className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => deleteBook.mutate(book.id)}
+                              className="text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="p-12 text-center">
+                  <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No books found</h3>
+                  <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary mt-4">
                     <Plus className="w-4 h-4 mr-2" />
                     Add Your First Book
                   </Button>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Edit Dialog */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
