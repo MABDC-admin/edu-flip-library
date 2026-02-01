@@ -103,9 +103,12 @@ export type Database = {
           grade_level: number
           html5_url: string | null
           id: string
+          is_teacher_only: boolean
           page_count: number | null
           pdf_url: string | null
+          source: string
           status: Database["public"]["Enums"]["book_status"]
+          subject: string | null
           title: string
           updated_at: string
           uploaded_by: string | null
@@ -116,9 +119,12 @@ export type Database = {
           grade_level: number
           html5_url?: string | null
           id?: string
+          is_teacher_only?: boolean
           page_count?: number | null
           pdf_url?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["book_status"]
+          subject?: string | null
           title: string
           updated_at?: string
           uploaded_by?: string | null
@@ -129,9 +135,12 @@ export type Database = {
           grade_level?: number
           html5_url?: string | null
           id?: string
+          is_teacher_only?: boolean
           page_count?: number | null
           pdf_url?: string | null
+          source?: string
           status?: Database["public"]["Enums"]["book_status"]
+          subject?: string | null
           title?: string
           updated_at?: string
           uploaded_by?: string | null
@@ -142,6 +151,7 @@ export type Database = {
         Row: {
           avatar_url: string | null
           created_at: string
+          email: string | null
           grade_level: number | null
           id: string
           name: string
@@ -150,6 +160,7 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           created_at?: string
+          email?: string | null
           grade_level?: number | null
           id: string
           name: string
@@ -158,6 +169,7 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           created_at?: string
+          email?: string | null
           grade_level?: number | null
           id?: string
           name?: string
@@ -234,6 +246,7 @@ export type Database = {
     Functions: {
       can_access_book: { Args: { _book_id: string }; Returns: boolean }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
+      is_privileged: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "student" | "teacher"
