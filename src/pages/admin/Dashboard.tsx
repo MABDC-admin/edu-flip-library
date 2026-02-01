@@ -7,6 +7,8 @@ import { BookOpen, Users, TrendingUp, Clock, Filter, Book } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { Mail, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GRADE_LABELS } from '@/types/database';
 
@@ -14,6 +16,25 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
+  const { toast } = useToast();
+  const [isTestEmailLoading, setIsTestEmailLoading] = useState(false);
+
+  const sendTestEmail = async () => {
+    setIsTestEmailLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('notify-admin', {
+        body: { type: 'test', user_email: 'Admin', user_role: 'admin' }
+      });
+      if (error) throw error;
+      toast({ title: "Test Email Sent", description: "Check your inbox (and spam folder)." });
+    } catch (err: any) {
+      console.error(err);
+      toast({ title: "Test Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setIsTestEmailLoading(false);
+    }
+  };
+
   // Fetch stats
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
@@ -304,6 +325,26 @@ export default function AdminDashboard() {
                 </p>
                 <Button size="sm" variant="secondary" className="group-hover:bg-success group-hover:text-success-foreground transition-colors">
                   View Students
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card
+            className="hover:shadow-card transition-shadow cursor-pointer group relative overflow-hidden"
+            onClick={sendTestEmail}
+          >
+            <CardContent className="flex items-center gap-4 p-6">
+              <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
+                {isTestEmailLoading ? <Loader2 className="w-6 h-6 text-orange-500 animate-spin" /> : <Mail className="w-6 h-6 text-orange-500" />}
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg">Test Email Notification</h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Check if system emails are delivering correctly
+                </p>
+                <Button size="sm" variant="secondary" disabled={isTestEmailLoading}>
+                  {isTestEmailLoading ? "Sending..." : "Send Test Email"}
                 </Button>
               </div>
             </CardContent>
