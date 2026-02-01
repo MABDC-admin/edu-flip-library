@@ -1,5 +1,5 @@
 -- Create enum for user roles
-CREATE TYPE public.app_role AS ENUM ('admin', 'student');
+CREATE TYPE public.app_role AS ENUM ('admin', 'student', 'teacher');
 
 -- Create enum for book processing status
 CREATE TYPE public.book_status AS ENUM ('processing', 'ready', 'error');
@@ -31,6 +31,8 @@ CREATE TABLE public.books (
   cover_url TEXT,
   pdf_url TEXT,
   page_count INT DEFAULT 0,
+  source TEXT NOT NULL DEFAULT 'internal', -- 'internal' or 'quipper'
+  is_teacher_only BOOLEAN NOT NULL DEFAULT FALSE,
   status book_status NOT NULL DEFAULT 'processing',
   uploaded_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
@@ -62,6 +64,34 @@ AS $$
   )
 $$;
 
+-- Create helper function to check if user is teacher
+CREATE OR REPLACE FUNCTION public.is_teacher(_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role = 'teacher'
+  )
+$$;
+
+-- Create helper function to check if user is privileged (admin or teacher)
+CREATE OR REPLACE FUNCTION public.is_privileged(_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = _user_id AND role IN ('admin', 'teacher')
+  )
+$$;
+
 -- Create helper function to check if user can access a book
 CREATE OR REPLACE FUNCTION public.can_access_book(_book_id UUID)
 RETURNS BOOLEAN
@@ -75,10 +105,11 @@ AS $$
     JOIN public.profiles p ON p.id = auth.uid()
     WHERE b.id = _book_id
       AND (
-        public.is_admin(auth.uid())
+        public.is_privileged(auth.uid())
         OR (
           b.status = 'ready'
           AND b.grade_level = p.grade_level
+          AND NOT b.is_teacher_only -- Flexible visibility check
         )
       )
   )
@@ -113,12 +144,20 @@ CREATE POLICY "Profiles visibility" ON public.profiles FOR SELECT TO authenticat
 CREATE POLICY "Profiles update" ON public.profiles FOR UPDATE TO authenticated USING (id = auth.uid() OR public.is_admin(auth.uid()));
 
 CREATE POLICY "Roles visibility" ON public.user_roles FOR SELECT TO authenticated USING (user_id = auth.uid() OR public.is_admin(auth.uid()));
+CREATE POLICY "Admins can manage roles" ON public.user_roles FOR ALL TO authenticated USING (public.is_admin(auth.uid())) WITH CHECK (public.is_admin(auth.uid()));
 
 CREATE POLICY "Books visibility" ON public.books FOR SELECT TO authenticated 
-  USING (public.is_admin(auth.uid()) OR (status = 'ready' AND grade_level = (SELECT grade_level FROM public.profiles WHERE id = auth.uid())));
+  USING (
+    public.is_privileged(auth.uid()) 
+    OR (
+      status = 'ready' 
+      AND grade_level = (SELECT grade_level FROM public.profiles WHERE id = auth.uid())
+      AND NOT is_teacher_only
+    )
+  );
 
-CREATE POLICY "Admin full access books" ON public.books ALL TO authenticated USING (public.is_admin(auth.uid()));
-CREATE POLICY "Admin full access pages" ON public.book_pages ALL TO authenticated USING (public.is_admin(auth.uid()));
+CREATE POLICY "Privileged full access books" ON public.books FOR ALL TO authenticated USING (public.is_privileged(auth.uid()));
+CREATE POLICY "Privileged full access pages" ON public.book_pages FOR ALL TO authenticated USING (public.is_privileged(auth.uid()));
 
 CREATE POLICY "Pages visibility" ON public.book_pages FOR SELECT TO authenticated USING (public.can_access_book(book_id));
 
@@ -130,7 +169,7 @@ INSERT INTO storage.buckets (id, name, public) VALUES ('pdf-uploads', 'pdf-uploa
 -- Storage policies
 CREATE POLICY "Public book covers" ON storage.objects FOR SELECT USING (bucket_id = 'book-covers');
 CREATE POLICY "Public book pages" ON storage.objects FOR SELECT USING (bucket_id = 'book-pages');
-CREATE POLICY "Admin storage access" ON storage.objects ALL TO authenticated USING (public.is_admin(auth.uid()));
+CREATE POLICY "Admin storage access" ON storage.objects FOR ALL TO authenticated USING (public.is_admin(auth.uid()));
 
 -- Handle new user profile creation
 CREATE OR REPLACE FUNCTION public.handle_new_user()

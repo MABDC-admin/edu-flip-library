@@ -24,6 +24,8 @@ export interface Book {
   cover_url: string | null;
   pdf_url: string | null;
   page_count: number;
+  source: 'internal' | 'quipper';
+  is_teacher_only: boolean;
   status: BookStatus;
   uploaded_by: string | null;
   created_at: string;

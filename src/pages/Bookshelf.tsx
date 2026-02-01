@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBooks } from '@/hooks/useBooks';
 import { BookGrid } from '@/components/books/BookGrid';
@@ -10,20 +10,31 @@ import { GRADE_LABELS } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Bookshelf() {
-  const { user, profile, signOut, isAdmin, isTeacher } = useAuth();
+  const { user, profile, signOut, isAdmin, isTeacher, isLoading: authLoading } = useAuth();
   const { data: books, isLoading } = useBooks();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [authLoading, user, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
   };
 
-  if (!user) {
-    navigate('/auth');
-    return null;
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
   }
+
+  if (!user) return null;
 
   const allBooks = books || [];
 

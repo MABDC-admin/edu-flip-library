@@ -7,7 +7,9 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  X
+  X,
+  Shield,
+  Library
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
@@ -21,6 +23,7 @@ const navItems = [
   { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/admin/books', label: 'Manage Books', icon: BookOpen },
   { href: '/admin/students', label: 'Students', icon: Users },
+  { href: '/admin/users', label: 'Manage Roles', icon: Shield },
 ];
 
 export function AdminLayout({ children, title }: AdminLayoutProps) {
@@ -118,6 +121,15 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
 
           {/* User section */}
           <div className="p-4 border-t">
+            <Button
+              variant="ghost"
+              className="w-full justify-start mb-4 text-muted-foreground hover:text-foreground"
+              onClick={() => navigate('/bookshelf')}
+            >
+              <Library className="w-5 h-5 mr-3" />
+              Back to Bookshelf
+            </Button>
+
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
                 <span className="text-sm font-semibold text-primary">

@@ -10,12 +10,13 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X, Lock, Globe } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePdfToImages } from '@/hooks/usePdfToImages';
-import { GRADE_LABELS, Book } from '@/types/database';
+import { GRADE_LABELS, Book, BookWithProgress } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
 import { cn } from '@/lib/utils';
@@ -46,6 +47,11 @@ export default function AdminBooks() {
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
   const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
   const [tempTitle, setTempTitle] = useState('');
+  const [source, setSource] = useState<'internal' | 'quipper'>('internal');
+  const [isTeacherOnly, setIsTeacherOnly] = useState(false);
+  const [bulkSource, setBulkSource] = useState<'internal' | 'quipper'>('internal');
+  const [bulkIsTeacherOnly, setBulkIsTeacherOnly] = useState(false);
+  const [filterSource, setFilterSource] = useState<string>('all');
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -59,14 +65,15 @@ export default function AdminBooks() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data as Book[];
+      return (data as any) as BookWithProgress[];
     },
   });
 
   const filteredBooks = books?.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesGrade = filterGrade === 'all' || book.grade_level === parseInt(filterGrade);
-    return matchesSearch && matchesGrade;
+    const matchesSource = filterSource === 'all' || book.source === filterSource;
+    return matchesSearch && matchesGrade && matchesSource;
   });
 
   // Group books by grade
@@ -81,10 +88,15 @@ export default function AdminBooks() {
   const sortedGrades = groupedBooks ? Object.keys(groupedBooks).map(Number).sort((a, b) => a - b) : [];
 
   const updateBook = useMutation({
-    mutationFn: async ({ id, title, gradeLevel }: { id: string; title: string; gradeLevel: number }) => {
+    mutationFn: async ({ id, title, gradeLevel, source, isTeacherOnly }: { id: string; title: string; gradeLevel: number; source?: string; isTeacherOnly?: boolean }) => {
       const { data, error } = await supabase
         .from('books')
-        .update({ title, grade_level: gradeLevel })
+        .update({
+          title,
+          grade_level: gradeLevel,
+          ...(source && { source }),
+          ...(isTeacherOnly !== undefined && { is_teacher_only: isTeacherOnly })
+        })
         .eq('id', id)
         .select()
         .single();
@@ -105,13 +117,22 @@ export default function AdminBooks() {
 
   const { progress: pdfProgress, processInBrowser, reset: resetPdfProgress } = usePdfToImages();
 
-  const uploadSingleBook = async (title: string, grade: number, pdf: File, cover: File | null) => {
+  const uploadSingleBook = async (
+    title: string,
+    grade: number,
+    pdf: File,
+    cover: File | null,
+    source: 'internal' | 'quipper' = 'internal',
+    isTeacherOnly: boolean = false
+  ) => {
     // 1. Create book record
     const { data: book, error: bookError } = await supabase
       .from('books')
       .insert({
         title,
         grade_level: grade,
+        source,
+        is_teacher_only: isTeacherOnly,
         status: 'processing',
         page_count: 0,
       })
@@ -153,10 +174,24 @@ export default function AdminBooks() {
   };
 
   const createBook = useMutation({
-    mutationFn: async ({ title, gradeLevel, pdfFile, coverFile }: { title: string; gradeLevel: number; pdfFile: File; coverFile: File | null }) => {
+    mutationFn: async ({
+      title,
+      gradeLevel,
+      pdfFile,
+      coverFile,
+      source,
+      isTeacherOnly
+    }: {
+      title: string;
+      gradeLevel: number;
+      pdfFile: File;
+      coverFile: File | null;
+      source: 'internal' | 'quipper';
+      isTeacherOnly: boolean;
+    }) => {
       setIsUploading(true);
       try {
-        return await uploadSingleBook(title, gradeLevel, pdfFile, coverFile);
+        return await uploadSingleBook(title, gradeLevel, pdfFile, coverFile, source, isTeacherOnly);
       } finally {
         setIsUploading(false);
       }
@@ -185,7 +220,7 @@ export default function AdminBooks() {
       setBulkProgress(p => ({ ...p, currentTitle: title }));
 
       try {
-        await uploadSingleBook(title, bulkGrade, file, null);
+        await uploadSingleBook(title, bulkGrade, file, null, bulkSource, bulkIsTeacherOnly);
         setBulkProgress(p => ({ ...p, done: i + 1 }));
       } catch (err) {
         toast({ title: `Failed: ${title}`, variant: 'destructive' });
@@ -205,6 +240,17 @@ export default function AdminBooks() {
     setPdfFile(null);
     setCoverFile(null);
     setErrors({});
+    setSource('internal');
+    setIsTeacherOnly(false);
+  };
+
+  const openEditDialog = (book: Book) => {
+    setEditingBook(book);
+    setTitle(book.title);
+    setGradeLevel(book.grade_level);
+    setSource(book.source);
+    setIsTeacherOnly(book.is_teacher_only);
+    setIsEditOpen(true);
   };
 
   const deleteBook = useMutation({
@@ -253,7 +299,7 @@ export default function AdminBooks() {
     try {
       formSchema.parse({ title, gradeLevel });
       setErrors({});
-      createBook.mutate({ title, gradeLevel, pdfFile, coverFile });
+      createBook.mutate({ title, gradeLevel, pdfFile, coverFile, source, isTeacherOnly });
     } catch (error) {
       if (error instanceof z.ZodError) {
         const newErrors: Record<string, string> = {};
@@ -310,7 +356,18 @@ export default function AdminBooks() {
               </SelectContent>
             </Select>
 
-            <div className="flex bg-muted rounded-lg p-1">
+            <Select value={filterSource} onValueChange={setFilterSource}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue placeholder="All Sources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="internal">Internal</SelectItem>
+                <SelectItem value="quipper">Quipper</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-lg border">
               <Button
                 variant={viewMode === 'table' ? 'secondary' : 'ghost'}
                 size="icon"
@@ -357,6 +414,34 @@ export default function AdminBooks() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Content Source</Label>
+                      <Select
+                        value={bulkSource}
+                        onValueChange={(val: 'internal' | 'quipper') => {
+                          setBulkSource(val);
+                          if (val === 'quipper') setBulkIsTeacherOnly(true);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="internal">Internal Library</SelectItem>
+                          <SelectItem value="quipper">Quipper Content</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm font-medium">Teacher & Admin Only</Label>
+                        <p className="text-xs text-muted-foreground">Hide these books from student bookshelves</p>
+                      </div>
+                      <Switch
+                        checked={bulkIsTeacherOnly}
+                        onCheckedChange={setBulkIsTeacherOnly}
+                      />
                     </div>
                     <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                       <input
@@ -449,6 +534,58 @@ export default function AdminBooks() {
                           />
                         </div>
                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Grade Level</Label>
+                        <Select
+                          value={gradeLevel.toString()}
+                          onValueChange={(val) => setGradeLevel(parseInt(val))}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select Grade" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(GRADE_LABELS).map(([val, label]) => (
+                              <SelectItem key={val} value={val}>
+                                {label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>Content Source</Label>
+                        <Select
+                          value={source}
+                          onValueChange={(val: 'internal' | 'quipper') => {
+                            setSource(val);
+                            // Auto-set teacher only for quipper
+                            if (val === 'quipper') setIsTeacherOnly(true);
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Source" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="internal">Internal Library</SelectItem>
+                            <SelectItem value="quipper">Quipper Content</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm font-medium">Teacher & Admin Only</Label>
+                        <p className="text-xs text-muted-foreground">Hide this book from student bookshelves</p>
+                      </div>
+                      <Switch
+                        checked={isTeacherOnly}
+                        onCheckedChange={setIsTeacherOnly}
+                      />
                     </div>
 
                     <div className="space-y-2">
@@ -563,9 +700,28 @@ export default function AdminBooks() {
                         <div className="absolute top-2 left-2 flex gap-1">
                           {getStatusBadge(book.status)}
                         </div>
+                        <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+                          {book.is_teacher_only ? (
+                            <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg" title="Teacher Only">
+                              <Lock className="w-3 h-3" />
+                            </div>
+                          ) : (
+                            <div className="bg-blue-500/90 text-white rounded-full p-1 shadow-lg" title="Visible to Students">
+                              <Globe className="w-3 h-3" />
+                            </div>
+                          )}
+                          {book.source === 'quipper' && (
+                            <div className="bg-purple-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-lg uppercase tracking-tight">
+                              Q
+                            </div>
+                          )}
+                        </div>
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                           <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
                             <BookOpen className="w-4 h-4" />
+                          </Button>
+                          <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}>
+                            <Edit2 className="w-4 h-4" />
                           </Button>
                           <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
                             <Trash2 className="w-4 h-4" />
@@ -634,7 +790,9 @@ export default function AdminBooks() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Title</TableHead>
-                          <TableHead>Pages</TableHead>
+                          <TableHead>Grade</TableHead>
+                          <TableHead>Source</TableHead>
+                          <TableHead>Visibility</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Created</TableHead>
                           <TableHead className="w-[100px]">Actions</TableHead>
@@ -673,7 +831,25 @@ export default function AdminBooks() {
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell>{book.page_count}</TableCell>
+                            <TableCell>
+                              <Badge variant="outline">{GRADE_LABELS[book.grade_level]}</Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="secondary" className={cn(book.source === 'quipper' && "bg-purple-100 text-purple-700")}>
+                                {book.source === 'quipper' ? 'Quipper' : 'Internal'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {book.is_teacher_only ? (
+                                <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                                  <Lock className="w-3 h-3 mr-1" /> Teacher Only
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-blue-100 text-blue-700 border-blue-200">
+                                  <Globe className="w-3 h-3 mr-1" /> Students
+                                </Badge>
+                              )}
+                            </TableCell>
                             <TableCell>{getStatusBadge(book.status)}</TableCell>
                             <TableCell className="text-muted-foreground text-xs">
                               {new Date(book.created_at).toLocaleDateString()}
@@ -686,6 +862,13 @@ export default function AdminBooks() {
                                   onClick={() => navigate(`/read/${book.id}`)}
                                 >
                                   <BookOpen className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => openEditDialog(book)}
+                                >
+                                  <Edit2 className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -752,6 +935,39 @@ export default function AdminBooks() {
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Content Source</Label>
+                  <Select
+                    value={source}
+                    onValueChange={(val: 'internal' | 'quipper') => {
+                      setSource(val);
+                      if (val === 'quipper') setIsTeacherOnly(true);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="internal">Internal Library</SelectItem>
+                      <SelectItem value="quipper">Quipper Content</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed col-span-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-sm font-medium">Teacher & Admin Only</Label>
+                    <p className="text-xs text-muted-foreground">Hide this book from student bookshelves</p>
+                  </div>
+                  <Switch
+                    checked={isTeacherOnly}
+                    onCheckedChange={setIsTeacherOnly}
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-4">
                 <Button variant="outline" onClick={() => setIsEditOpen(false)}>
                   Cancel
@@ -761,7 +977,9 @@ export default function AdminBooks() {
                   onClick={() => editingBook && updateBook.mutate({
                     id: editingBook.id,
                     title,
-                    gradeLevel
+                    gradeLevel,
+                    source,
+                    isTeacherOnly
                   })}
                   disabled={updateBook.isPending}
                 >

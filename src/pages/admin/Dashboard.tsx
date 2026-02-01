@@ -13,17 +13,18 @@ import { GRADE_LABELS } from '@/types/database';
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterSource, setFilterSource] = useState<string>('all');
   // Fetch stats
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
     queryFn: async () => {
       const [booksResult, studentsResult, progressResult] = await Promise.all([
-        supabase.from('books').select('id, title, grade_level, status, cover_url'),
+        (supabase.from('books') as any).select('id, title, grade_level, status, cover_url, source, is_teacher_only'),
         supabase.from('profiles').select('id, grade_level'),
         supabase.from('reading_progress').select('id, completed, last_read_at').order('last_read_at', { ascending: false }).limit(10),
       ]);
 
-      const books = booksResult.data || [];
+      const books = (booksResult.data as any[]) || [];
       const students = studentsResult.data || [];
       const recentActivity = progressResult.data || [];
 
@@ -51,20 +52,28 @@ export default function AdminDashboard() {
   // Filtered stats
   const filteredStats = useMemo(() => {
     if (!stats) return null;
-    if (filterGrade === 'all') return stats;
+    let filteredBooks = stats.books;
 
-    const gradeNum = parseInt(filterGrade);
-    const filteredBooks = stats.books.filter(b => b.grade_level === gradeNum);
-    const filteredStudentsCount = stats.studentsByGrade[gradeNum] || 0;
+    if (filterGrade !== 'all') {
+      const gradeNum = parseInt(filterGrade);
+      filteredBooks = filteredBooks.filter((b: any) => b.grade_level === gradeNum);
+    }
+
+    if (filterSource !== 'all') {
+      filteredBooks = filteredBooks.filter((b: any) => b.source === filterSource);
+    }
+
+    const gradeNum = filterGrade === 'all' ? null : parseInt(filterGrade);
+    const filteredStudentsCount = gradeNum ? (stats.studentsByGrade[gradeNum] || 0) : stats.students.length;
 
     return {
       ...stats,
       totalBooks: filteredBooks.length,
-      readyBooks: filteredBooks.filter(b => b.status === 'ready').length,
-      processingBooks: filteredBooks.filter(b => b.status === 'processing').length,
+      readyBooks: filteredBooks.filter((b: any) => b.status === 'ready').length,
+      processingBooks: filteredBooks.filter((b: any) => b.status === 'processing').length,
       totalStudents: filteredStudentsCount,
     };
-  }, [stats, filterGrade]);
+  }, [stats, filterGrade, filterSource]);
 
   const statCards = [
     {
@@ -107,22 +116,36 @@ export default function AdminDashboard() {
               <Filter className="w-4 h-4 text-primary" />
               Quick Filter
             </h2>
-            <p className="text-xs text-muted-foreground">Filter dashboard data by grade level</p>
+            <p className="text-xs text-muted-foreground">Filter dashboard data</p>
           </div>
 
-          <Select value={filterGrade} onValueChange={setFilterGrade}>
-            <SelectTrigger className="w-full sm:w-[200px] bg-white">
-              <SelectValue placeholder="All Grades" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Grades</SelectItem>
-              {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Select value={filterSource} onValueChange={setFilterSource}>
+              <SelectTrigger className="w-full sm:w-[160px] bg-white">
+                <Filter className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="All Sources" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="internal">Internal Library</SelectItem>
+                <SelectItem value="quipper">Quipper Library</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={filterGrade} onValueChange={setFilterGrade}>
+              <SelectTrigger className="w-full sm:w-[200px] bg-white">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Grades</SelectItem>
+                {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Stats grid */}
@@ -287,6 +310,6 @@ export default function AdminDashboard() {
           </Card>
         </div>
       </div>
-    </AdminLayout>
+    </AdminLayout >
   );
 }

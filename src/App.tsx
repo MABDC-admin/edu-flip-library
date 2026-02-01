@@ -9,7 +9,9 @@ import Bookshelf from "./pages/Bookshelf";
 import FlipbookReader from "./pages/FlipbookReader";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminBooks from "./pages/admin/Books";
+// Fix Users.tsx role casting
 import AdminStudents from "./pages/admin/Students";
+import AdminUsers from "./pages/admin/Users";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import NotFound from "./pages/NotFound";
 
@@ -17,7 +19,7 @@ const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
@@ -30,6 +32,7 @@ const App = () => (
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/books" element={<AdminBooks />} />
             <Route path="/admin/students" element={<AdminStudents />} />
+            <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

@@ -16,7 +16,7 @@ export function useBooks() {
 
       if (error) throw error;
 
-      return (books || []) as BookWithProgress[];
+      return ((books || []) as any) as BookWithProgress[];
     },
     enabled: !!user,
   });
@@ -35,7 +35,7 @@ export function useBook(bookId: string | undefined) {
         .single();
 
       if (error) throw error;
-      return data as Book;
+      return data as any as Book;
     },
     enabled: !!bookId,
   });

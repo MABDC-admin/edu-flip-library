@@ -21,6 +21,7 @@ export default function TeacherDashboard() {
   const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
   const [selectedBook, setSelectedBook] = useState<BookWithProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedSource, setSelectedSource] = useState<'all' | 'internal' | 'quipper'>('all');
 
   // Redirect if not authenticated or not a teacher/admin
   if (!authLoading && !user) {
@@ -44,7 +45,7 @@ export default function TeacherDashboard() {
         .order('grade_level', { ascending: true });
 
       if (error) throw error;
-      return (data || []) as BookWithProgress[];
+      return ((data || []) as any) as BookWithProgress[];
     },
   });
 
@@ -53,7 +54,7 @@ export default function TeacherDashboard() {
     queryKey: ['teacher-stats'],
     queryFn: async () => {
       const [booksResult, studentsResult, progressResult] = await Promise.all([
-        supabase.from('books').select('id, grade_level, status'),
+        (supabase.from('books') as any).select('id, grade_level, status, source'),
         supabase.from('profiles').select('id, grade_level'),
         supabase
           .from('reading_progress')
@@ -67,14 +68,14 @@ export default function TeacherDashboard() {
 
       // Group books by grade
       const booksByGrade: Record<number, number> = {};
-      allBooks.forEach((b) => {
+      allBooks.forEach((b: any) => {
         if (b.grade_level && b.status === 'ready') {
           booksByGrade[b.grade_level] = (booksByGrade[b.grade_level] || 0) + 1;
         }
       });
 
       return {
-        totalBooks: allBooks.filter((b) => b.status === 'ready').length,
+        totalBooks: allBooks.filter((b: any) => b.status === 'ready').length,
         totalStudents: students.length,
         completedReads: completedBooks.length,
         booksByGrade,
@@ -85,9 +86,15 @@ export default function TeacherDashboard() {
   // Filter books by selected grades
   const filteredBooks = useMemo(() => {
     if (!books) return [];
-    if (selectedGrades.length === 0) return books;
-    return books.filter((book) => selectedGrades.includes(book.grade_level));
-  }, [books, selectedGrades]);
+    let filtered = books;
+    if (selectedGrades.length > 0) {
+      filtered = filtered.filter((book) => selectedGrades.includes(book.grade_level));
+    }
+    if (selectedSource !== 'all') {
+      filtered = filtered.filter((book) => book.source === selectedSource);
+    }
+    return filtered;
+  }, [books, selectedGrades, selectedSource]);
 
   // Group books by grade for organized display
   const booksByGrade = useMemo(() => {
@@ -159,25 +166,49 @@ export default function TeacherDashboard() {
             <p className="text-xs text-muted-foreground">Jump directly to a specific grade level</p>
           </div>
 
-          <Select
-            value={selectedGrades.length === 1 ? selectedGrades[0].toString() : 'all'}
-            onValueChange={handleGradeSelect}
-          >
-            <SelectTrigger className="w-full sm:w-[200px] bg-white">
-              <SelectValue placeholder="All Grades" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Grades</SelectItem>
-              {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                <SelectItem key={value} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={selectedGrades.length === 1 ? selectedGrades[0].toString() : 'all'}
+              onValueChange={handleGradeSelect}
+            >
+              <SelectTrigger className="w-[140px] bg-white">
+                <SelectValue placeholder="All Grades" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Grades</SelectItem>
+                {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={selectedSource}
+              onValueChange={(val: 'all' | 'internal' | 'quipper') => setSelectedSource(val)}
+            >
+              <SelectTrigger className="w-[140px] bg-white">
+                <SelectValue placeholder="Source" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="internal">Internal Library</SelectItem>
+                <SelectItem value="quipper">Quipper Content</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
-        {/* Stats Overview */}
+        {/* Visibility filters */}
+        <div className="flex items-center gap-2 mb-4">
+          <GradeFilter
+            selectedGroup={selectedGroup}
+            onGroupChange={setSelectedGroup}
+            selectedGrades={selectedGrades}
+            onGradesChange={setSelectedGrades}
+          />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {isLoading
             ? Array.from({ length: 4 }).map((_, i) => (
