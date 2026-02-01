@@ -169,6 +169,7 @@ export default function AdminUsers() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
+                                <TableHead>Email</TableHead>
                                 <TableHead>Grade</TableHead>
                                 <TableHead>Roles</TableHead>
                                 <TableHead>Actions</TableHead>
@@ -182,6 +183,7 @@ export default function AdminUsers() {
                             ) : filteredProfiles.map((user) => (
                                 <TableRow key={user.id}>
                                     <TableCell className="font-medium">{user.name}</TableCell>
+                                    <TableCell className="text-muted-foreground">{user.email || '—'}</TableCell>
                                     <TableCell>{user.grade_level}</TableCell>
                                     <TableCell>
                                         <div className="flex gap-1">

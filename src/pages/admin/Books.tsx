@@ -40,7 +40,7 @@ export default function AdminBooks() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkGrade, setBulkGrade] = useState<number>(1);

@@ -10,6 +10,7 @@ CREATE TABLE public.profiles (
   name TEXT NOT NULL,
   grade_level INT CHECK (grade_level >= 1 AND grade_level <= 12),
   avatar_url TEXT,
+  email TEXT, -- Added email column
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
@@ -175,11 +176,12 @@ CREATE POLICY "Admin storage access" ON storage.objects FOR ALL TO authenticated
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, grade_level)
+  INSERT INTO public.profiles (id, name, grade_level, email)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
-    COALESCE((NEW.raw_user_meta_data->>'grade_level')::int, 1)
+    COALESCE((NEW.raw_user_meta_data->>'grade_level')::int, 1),
+    NEW.email -- Insert email from auth.users
   );
   
   INSERT INTO public.user_roles (user_id, role)
