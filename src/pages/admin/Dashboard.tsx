@@ -38,13 +38,20 @@ export default function AdminDashboard() {
       console.log('Raw fetch response:', { status: response.status, data: responseData });
 
       if (!response.ok) {
-        throw new Error(responseData.error || `HTTP Error ${response.status}`);
+        // Handle explicit Resend error details if present
+        const resendError = responseData.details?.message || responseData.error || `HTTP Error ${response.status}`;
+        throw new Error(resendError);
       }
 
       toast({ title: "Test Email Sent", description: "Check your inbox (and spam folder)." });
     } catch (err: any) {
       console.error('Test Email Error:', err);
-      toast({ title: "Test Failed", description: err.message || "Unknown error", variant: "destructive" });
+      // Show more descriptive error message to the user
+      toast({
+        title: "Test Failed",
+        description: err.message || "Unknown error occurred during sending.",
+        variant: "destructive"
+      });
     } finally {
       setIsTestEmailLoading(false);
     }
