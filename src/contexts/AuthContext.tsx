@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .select('*')
       .eq('id', userId)
       .single();
-    
+
     if (profileData) {
       setProfile(profileData);
     }
@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .select('role')
       .eq('user_id', userId)
       .single();
-    
+
     if (roleData) {
       setRole(roleData.role as AppRole);
     }
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       (_event, newSession) => {
         setSession(newSession);
         setUser(newSession?.user ?? null);
-        
+
         // Defer Supabase calls with setTimeout
         if (newSession?.user) {
           setTimeout(() => {
@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setProfile(null);
           setRole(null);
         }
-        
+
         setIsLoading(false);
       }
     );
@@ -81,11 +81,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
       setSession(existingSession);
       setUser(existingSession?.user ?? null);
-      
+
       if (existingSession?.user) {
         fetchProfile(existingSession.user.id);
       }
-      
+
       setIsLoading(false);
     });
 
@@ -97,12 +97,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email,
       password,
     });
+
+    if (!error) {
+      // Get role after sign in
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Fetch role to send in notification
+        const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id).single();
+        const role = roleData?.role || 'student';
+
+        await supabase.functions.invoke('notify-admin', {
+          body: {
+            type: 'login',
+            user_email: email,
+            user_role: role,
+          }
+        });
+      }
+    }
     return { error: error as Error | null };
   };
 
   const signUp = async (email: string, password: string, name: string, gradeLevel?: number) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,

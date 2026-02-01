@@ -20,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 // react-pdf imports
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -71,6 +72,23 @@ export default function FlipbookReader() {
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
   const { data: pages } = useBookPages(bookId);
+  const { user, role } = useAuth();
+  const notificationSentRef = useRef(false);
+
+  // Notify admin when book is accessed
+  useEffect(() => {
+    if (book && user && !notificationSentRef.current) {
+      notificationSentRef.current = true;
+      supabase.functions.invoke('notify-admin', {
+        body: {
+          type: 'read',
+          user_email: user.email,
+          user_role: role || 'student',
+          book_title: book.title,
+        }
+      }).catch(console.error);
+    }
+  }, [book, user, role]);
 
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
