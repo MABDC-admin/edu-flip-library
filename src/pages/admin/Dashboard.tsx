@@ -7,7 +7,6 @@ import { BookOpen, Users, TrendingUp, Clock, Filter, Book } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GRADE_LABELS } from '@/types/database';
 
@@ -15,7 +14,6 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
-  const { toast } = useToast();
 
   // Fetch stats
   const { data: stats, isLoading } = useQuery({

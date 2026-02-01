@@ -7,10 +7,9 @@ import { cn } from '@/lib/utils';
 
 interface TeacherLayoutProps {
   children: ReactNode;
-  title?: string;
 }
 
-export function TeacherLayout({ children, title }: TeacherLayoutProps) {
+export function TeacherLayout({ children }: TeacherLayoutProps) {
   const { profile, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
 
