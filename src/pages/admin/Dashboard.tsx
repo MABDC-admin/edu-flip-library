@@ -22,14 +22,29 @@ export default function AdminDashboard() {
   const sendTestEmail = async () => {
     setIsTestEmailLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('notify-admin', {
-        body: { type: 'test', user_email: 'Admin', user_role: 'admin' }
+      console.log('Sending test email via raw fetch...');
+      const session = (await supabase.auth.getSession()).data.session;
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ type: 'test', user_email: 'Admin', user_role: 'admin' })
       });
-      if (error) throw error;
+
+      const responseData = await response.json().catch(() => ({}));
+      console.log('Raw fetch response:', { status: response.status, data: responseData });
+
+      if (!response.ok) {
+        throw new Error(responseData.error || `HTTP Error ${response.status}`);
+      }
+
       toast({ title: "Test Email Sent", description: "Check your inbox (and spam folder)." });
     } catch (err: any) {
-      console.error(err);
-      toast({ title: "Test Failed", description: err.message, variant: "destructive" });
+      console.error('Test Email Error:', err);
+      toast({ title: "Test Failed", description: err.message || "Unknown error", variant: "destructive" });
     } finally {
       setIsTestEmailLoading(false);
     }

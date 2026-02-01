@@ -1,7 +1,7 @@
 project_id = "kpzpuiiagtwajyrfmuzl"
 
 [functions.process-book]
-verify_jwt = false
+verify_jwt = true
 
 [functions.notify-admin]
-verify_jwt = false
+verify_jwt = true
