@@ -8,19 +8,16 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Progress } from '@/components/ui/progress';
-import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X, Lock, Globe, RefreshCw } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, Lock, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePdfToImages } from '@/hooks/usePdfToImages';
 import { GRADE_LABELS, SUBJECT_LABELS, Book, BookWithProgress } from '@/types/database';
-import { Skeleton } from '@/components/ui/skeleton';
 import { z } from 'zod';
-import { cn } from '@/lib/utils';
 
-const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
+
 
 const formSchema = z.object({
     title: z.string().min(1, 'Title is required').max(255),
@@ -30,25 +27,25 @@ const formSchema = z.object({
 export default function AdminQuipper() {
     const navigate = useNavigate();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
-    const [editingBook, setEditingBook] = useState<Book | null>(null);
+    const [, setIsEditOpen] = useState(false);
+    const [, setEditingBook] = useState<Book | null>(null);
     const [title, setTitle] = useState('');
     const [gradeLevel, setGradeLevel] = useState<number>(1);
     const [filterGrade, setFilterGrade] = useState<string>('all');
     const [pdfFile, setPdfFile] = useState<File | null>(null);
     const [coverFile, setCoverFile] = useState<File | null>(null);
-    const [errors, setErrors] = useState<Record<string, string>>({});
+    const [, setErrors] = useState<Record<string, string>>({});
     const [isUploading, setIsUploading] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-    const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
+    const [] = useState<'table' | 'grid'>('grid');
     const [isBulkOpen, setIsBulkOpen] = useState(false);
     const [bulkFiles, setBulkFiles] = useState<File[]>([]);
     const [bulkGrade, setBulkGrade] = useState<number>(1);
     const [bulkSubject, setBulkSubject] = useState<string>('Science');
     const [bulkCustomSubject, setBulkCustomSubject] = useState('');
-    const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
-    const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
-    const [tempTitle, setTempTitle] = useState('');
+    const [, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
+    const [] = useState<string | null>(null);
+    const [] = useState('');
     const [subject, setSubject] = useState<string>('Science');
     const [customSubject, setCustomSubject] = useState('');
     // Quipper always default to teacher only and source quipper
@@ -57,7 +54,7 @@ export default function AdminQuipper() {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const { data: books, isLoading } = useQuery({
+    const { data: books } = useQuery({
         queryKey: ['admin-quipper-books'],
         queryFn: async () => {
             const { data, error } = await supabase
@@ -87,7 +84,7 @@ export default function AdminQuipper() {
 
     const sortedGrades = groupedBooks ? Object.keys(groupedBooks).map(Number).sort((a, b) => a - b) : [];
 
-    const updateBook = useMutation({
+    useMutation({
         mutationFn: async ({ id, title, gradeLevel, isTeacherOnly }: { id: string; title: string; gradeLevel: number; isTeacherOnly?: boolean }) => {
             const { data, error } = await supabase
                 .from('books')
@@ -113,7 +110,7 @@ export default function AdminQuipper() {
         },
     });
 
-    const { progress: pdfProgress, processInBrowser, reset: resetPdfProgress } = usePdfToImages();
+    const { processInBrowser, reset: resetPdfProgress } = usePdfToImages();
 
     const uploadSingleBook = async (
         title: string,
