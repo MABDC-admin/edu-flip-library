@@ -10,7 +10,7 @@ import { BookDetailsDialog } from '@/components/teacher/BookDetailsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookWithProgress, GRADE_LABELS } from '@/types/database';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, BookOpen } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function TeacherDashboard() {
@@ -61,14 +61,20 @@ export default function TeacherDashboard() {
     return filtered;
   }, [books, selectedGrades, selectedSource]);
 
-  // Group books by grade for organized display
+  // Group books by grade and then by subject for organized display
   const booksByGrade = useMemo(() => {
-    const grouped: Record<number, BookWithProgress[]> = {};
+    const grouped: Record<number, Record<string, BookWithProgress[]>> = {};
     filteredBooks.forEach((book) => {
-      if (!grouped[book.grade_level]) {
-        grouped[book.grade_level] = [];
+      const grade = book.grade_level;
+      const subject = book.subject || 'Uncategorized';
+
+      if (!grouped[grade]) {
+        grouped[grade] = {};
       }
-      grouped[book.grade_level].push(book);
+      if (!grouped[grade][subject]) {
+        grouped[grade][subject] = [];
+      }
+      grouped[grade][subject].push(book);
     });
     return grouped;
   }, [filteredBooks]);
@@ -128,39 +134,79 @@ export default function TeacherDashboard() {
             ))}
           </div>
         ) : selectedGrades.length === 0 ? (
-          // Show all books in a single grid when no filter
-          <div className="space-y-4">
+          // Show all books in a single folder-like view when no filter
+          <div className="space-y-12">
             <h3 className="text-xl font-display font-semibold">
               All Books ({filteredBooks.length})
             </h3>
-            <TeacherBookGrid
-              books={filteredBooks}
-              onBookClick={handleBookClick}
-              showSearch
-              emptyMessage="No books available in the library"
-            />
-          </div>
-        ) : (
-          // Show books grouped by grade when filtered
-          <div className="space-y-8">
-            {Object.entries(booksByGrade)
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([grade, gradeBooks]) => (
-                <div key={grade} className="space-y-4">
+
+            {/* Flatten the nested structure for the "All Books" view but still group by Subject for clarity */}
+            {Object.entries(
+              filteredBooks.reduce((acc, book) => {
+                const subj = book.subject || 'Uncategorized';
+                if (!acc[subj]) acc[subj] = [];
+                acc[subj].push(book);
+                return acc;
+              }, {} as Record<string, BookWithProgress[]>)
+            )
+              .sort(([a], [b]) => a.localeCompare(b))
+              .map(([subj, subjBooks]) => (
+                <div key={subj} className="space-y-6">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-xl font-display font-semibold">
-                      {GRADE_LABELS[Number(grade)]}
-                    </h3>
-                    <span className="text-sm text-muted-foreground">
-                      ({gradeBooks.length} books)
+                    <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center">
+                      <BookOpen className="w-4 h-4 text-primary/60" />
+                    </div>
+                    <h4 className="text-lg font-semibold text-slate-700">{subj}</h4>
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                      {subjBooks.length} Books
                     </span>
                   </div>
                   <TeacherBookGrid
-                    books={gradeBooks}
+                    books={subjBooks}
                     onBookClick={handleBookClick}
-                    showSearch={false}
-                    emptyMessage="No books for this grade"
+                    showSearch={subj === Object.keys(booksByGrade)[0]} // Only show search once if needed
+                    emptyMessage="No books available in the library"
                   />
+                </div>
+              ))}
+          </div>
+        ) : (
+          // Show books grouped by grade and subject when filtered
+          <div className="space-y-12">
+            {Object.entries(booksByGrade)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([grade, subjects]) => (
+                <div key={grade} className="space-y-8">
+                  <div className="flex items-center gap-4">
+                    <h3 className="text-2xl font-display font-bold text-gradient whitespace-nowrap">
+                      {GRADE_LABELS[Number(grade)]}
+                    </h3>
+                    <div className="h-px flex-1 bg-slate-100" />
+                  </div>
+
+                  <div className="space-y-12 pl-4 border-l-2 border-slate-50">
+                    {Object.entries(subjects)
+                      .sort(([a], [b]) => a.localeCompare(b))
+                      .map(([subj, subjBooks]) => (
+                        <div key={subj} className="space-y-6">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center">
+                              <BookOpen className="w-4 h-4 text-primary/60" />
+                            </div>
+                            <h4 className="text-lg font-semibold text-slate-700">{subj}</h4>
+                            <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                              {subjBooks.length} Books
+                            </span>
+                          </div>
+                          <TeacherBookGrid
+                            books={subjBooks}
+                            onBookClick={handleBookClick}
+                            showSearch={false}
+                            emptyMessage="No books for this subject"
+                          />
+                        </div>
+                      ))}
+                  </div>
                 </div>
               ))}
           </div>

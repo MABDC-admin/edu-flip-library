@@ -74,13 +74,17 @@ export default function AdminQuipper() {
         return matchesSearch && matchesGrade;
     });
 
-    // Group books by grade
+    // Group books by grade and then by subject
     const groupedBooks = filteredBooks?.reduce((acc, book) => {
         const grade = book.grade_level;
-        if (!acc[grade]) acc[grade] = [];
-        acc[grade].push(book);
+        const subject = book.subject || 'Uncategorized';
+
+        if (!acc[grade]) acc[grade] = {};
+        if (!acc[grade][subject]) acc[grade][subject] = [];
+
+        acc[grade][subject].push(book);
         return acc;
-    }, {} as Record<number, Book[]>);
+    }, {} as Record<number, Record<string, Book[]>>);
 
     const sortedGrades = groupedBooks ? Object.keys(groupedBooks).map(Number).sort((a, b) => a - b) : [];
 
@@ -437,50 +441,77 @@ export default function AdminQuipper() {
                     </div >
                 </div >
 
-                {/* Content Grid */}
-                < div className="space-y-12" >
-                    {
-                        sortedGrades.map((grade) => (
-                            <div key={grade} className="space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <h2 className="text-xl font-bold text-gradient whitespace-nowrap">{GRADE_LABELS[grade]}</h2>
-                                    <div className="h-px w-full bg-slate-200" />
-                                    <Badge variant="outline">{groupedBooks?.[grade].length} Modules</Badge>
-                                </div>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                                    {groupedBooks?.[grade].map((book) => (
-                                        <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
-                                            <div className="aspect-[3/4] relative bg-slate-100">
-                                                {book.cover_url ? (
-                                                    <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
-                                                ) : (
-                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-300">
-                                                        <BookOpen className="w-12 h-12" />
-                                                    </div>
-                                                )}
-                                                <div className="absolute top-2 left-2 flex gap-1">
-                                                    {getStatusBadge(book.status)}
-                                                </div>
-                                                <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
-                                                    {book.is_teacher_only && <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg"><Lock className="w-3 h-3" /></div>}
-                                                </div>
-                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                    <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}><BookOpen className="w-4 h-4" /></Button>
-                                                    <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)}><RefreshCw className="w-4 h-4" /></Button>
-                                                    <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}><Edit2 className="w-4 h-4" /></Button>
-                                                    <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}><Trash2 className="w-4 h-4" /></Button>
-                                                </div>
-                                            </div>
-                                            <div className="p-3">
-                                                <h3 className="font-semibold text-sm truncate" title={book.title}>{book.title}</h3>
-                                            </div>
-                                        </Card>
-                                    ))}
-                                </div>
+                <div className="space-y-12">
+                    {sortedGrades.map((grade) => (
+                        <div key={grade} className="space-y-8">
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-2xl font-bold text-gradient whitespace-nowrap">{GRADE_LABELS[grade]}</h2>
+                                <div className="h-px w-full bg-slate-200" />
                             </div>
-                        ))
-                    }
-                </div >
+
+                            <div className="space-y-10 pl-4 border-l-2 border-slate-100/50">
+                                {Object.entries(groupedBooks?.[grade] || {})
+                                    .sort(([a], [b]) => a.localeCompare(b))
+                                    .map(([subj, subjBooks]) => (
+                                        <div key={subj} className="space-y-6">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                    <BookOpen className="w-4 h-4 text-primary" />
+                                                </div>
+                                                <h3 className="text-lg font-semibold text-slate-800">{subj}</h3>
+                                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none">
+                                                    {subjBooks.length} Modules
+                                                </Badge>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                                                {subjBooks.map((book) => (
+                                                    <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1 border-slate-100">
+                                                        <div className="aspect-[3/4] relative bg-slate-100">
+                                                            {book.cover_url ? (
+                                                                <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
+                                                            ) : (
+                                                                <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                                                                    <BookOpen className="w-12 h-12" />
+                                                                </div>
+                                                            )}
+                                                            <div className="absolute top-2 left-2 flex gap-1">
+                                                                {getStatusBadge(book.status)}
+                                                            </div>
+                                                            <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+                                                                {book.is_teacher_only && (
+                                                                    <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg">
+                                                                        <Lock className="w-3 h-3" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                                <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
+                                                                    <BookOpen className="w-4 h-4" />
+                                                                </Button>
+                                                                <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)}>
+                                                                    <RefreshCw className="w-4 h-4" />
+                                                                </Button>
+                                                                <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}>
+                                                                    <Edit2 className="w-4 h-4" />
+                                                                </Button>
+                                                                <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                        <div className="p-3">
+                                                            <h3 className="font-semibold text-sm truncate" title={book.title}>{book.title}</h3>
+                                                        </div>
+                                                    </Card>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div >
         </AdminLayout >
     );

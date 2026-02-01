@@ -38,13 +38,17 @@ export default function Bookshelf() {
 
   const allBooks = books || [];
 
-  // Group books by grade
+  // Group books by grade and then by subject
   const groupedBooks = allBooks.reduce((acc, book) => {
     const grade = book.grade_level;
-    if (!acc[grade]) acc[grade] = [];
-    acc[grade].push(book);
+    const subject = book.subject || 'Uncategorized';
+
+    if (!acc[grade]) acc[grade] = {};
+    if (!acc[grade][subject]) acc[grade][subject] = [];
+
+    acc[grade][subject].push(book);
     return acc;
-  }, {} as Record<number, typeof allBooks>);
+  }, {} as Record<number, Record<string, typeof allBooks>>);
 
   // Sort grades ascending
   const sortedGrades = Object.keys(groupedBooks).map(Number).sort((a, b) => a - b);
@@ -161,30 +165,57 @@ export default function Bookshelf() {
           <div className="space-y-16">
             {sortedGrades.length > 0 ? (
               sortedGrades.map((grade) => {
-                const gradeBooks = groupedBooks[grade];
-                const hasResults = searchQuery
-                  ? gradeBooks.some(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  : true;
+                const subjectsForGrade = groupedBooks[grade];
 
-                if (!hasResults) return null;
+                // Check if any subject in this grade has books matching the search
+                const hasResultsInGrade = Object.values(subjectsForGrade).some(subjBooks =>
+                  searchQuery
+                    ? subjBooks.some(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                    : true
+                );
+
+                if (!hasResultsInGrade) return null;
 
                 return (
-                  <div key={grade} className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div key={grade} className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="flex items-center gap-4">
                       <h3 className="text-2xl font-display font-bold text-gradient whitespace-nowrap">
                         {GRADE_LABELS[grade]}
                       </h3>
                       <div className="h-px flex-1 bg-slate-100" />
-                      <span className="text-xs font-medium text-muted-foreground bg-slate-50 px-2 py-1 rounded-full">
-                        {gradeBooks.length} Books
-                      </span>
                     </div>
 
-                    <BookGrid
-                      books={gradeBooks}
-                      externalSearchQuery={searchQuery}
-                      emptyMessage={`No books found in ${GRADE_LABELS[grade]}`}
-                    />
+                    <div className="space-y-12 pl-4 border-l-2 border-slate-50">
+                      {Object.entries(subjectsForGrade)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([subj, subjBooks]) => {
+                          const matchingBooks = searchQuery
+                            ? subjBooks.filter(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                            : subjBooks;
+
+                          if (matchingBooks.length === 0) return null;
+
+                          return (
+                            <div key={subj} className="space-y-6">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-primary/5 flex items-center justify-center">
+                                  <BookOpen className="w-4 h-4 text-primary/60" />
+                                </div>
+                                <h4 className="text-lg font-semibold text-slate-700">{subj}</h4>
+                                <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full uppercase tracking-tighter">
+                                  {matchingBooks.length} {matchingBooks.length === 1 ? 'Book' : 'Books'}
+                                </span>
+                              </div>
+
+                              <BookGrid
+                                books={matchingBooks}
+                                externalSearchQuery={searchQuery}
+                                emptyMessage={`No books found in ${subj}`}
+                              />
+                            </div>
+                          );
+                        })}
+                    </div>
                   </div>
                 );
               })
@@ -199,7 +230,9 @@ export default function Bookshelf() {
             )}
 
             {searchQuery && !sortedGrades.some(grade =>
-              groupedBooks[grade].some(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+              Object.values(groupedBooks[grade]).some(subjBooks =>
+                subjBooks.some(b => b.title.toLowerCase().includes(searchQuery.toLowerCase()))
+              )
             ) && (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="w-20 h-20 rounded-full bg-muted flex items-center justify-center mb-4">
