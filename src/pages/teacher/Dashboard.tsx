@@ -10,7 +10,8 @@ import { BookDetailsDialog } from '@/components/teacher/BookDetailsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BookWithProgress, GRADE_LABELS } from '@/types/database';
-import { BookOpen, Users, TrendingUp, GraduationCap } from 'lucide-react';
+import { BookOpen, Users, TrendingUp, GraduationCap, Filter } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function TeacherDashboard() {
   const { user, isTeacher, isAdmin, isLoading: authLoading } = useAuth();
@@ -105,6 +106,17 @@ export default function TeacherDashboard() {
     setDialogOpen(true);
   };
 
+  const handleGradeSelect = (value: string) => {
+    if (value === 'all') {
+      setSelectedGroup('all');
+      setSelectedGrades([]);
+    } else {
+      const gradeNum = parseInt(value);
+      setSelectedGroup('all'); // Clear group selection
+      setSelectedGrades([gradeNum]);
+    }
+  };
+
   const isLoading = booksLoading || statsLoading;
 
   const statCards = [
@@ -137,34 +149,62 @@ export default function TeacherDashboard() {
   return (
     <TeacherLayout title="eBook Library">
       <div className="space-y-8">
+        {/* Quick Access Filter */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Filter className="w-4 h-4 text-primary" />
+              Quick Grade View
+            </h2>
+            <p className="text-xs text-muted-foreground">Jump directly to a specific grade level</p>
+          </div>
+
+          <Select
+            value={selectedGrades.length === 1 ? selectedGrades[0].toString() : 'all'}
+            onValueChange={handleGradeSelect}
+          >
+            <SelectTrigger className="w-full sm:w-[200px] bg-white">
+              <SelectValue placeholder="All Grades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Grades</SelectItem>
+              {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Stats Overview */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {isLoading
             ? Array.from({ length: 4 }).map((_, i) => (
-                <Card key={i}>
-                  <CardHeader className="pb-2">
-                    <Skeleton className="h-4 w-20" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-8 w-12" />
-                  </CardContent>
-                </Card>
-              ))
+              <Card key={i}>
+                <CardHeader className="pb-2">
+                  <Skeleton className="h-4 w-20" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-12" />
+                </CardContent>
+              </Card>
+            ))
             : statCards.map((stat, i) => (
-                <Card key={i} className="hover:shadow-card transition-shadow">
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-xs font-medium text-muted-foreground">
-                      {stat.title}
-                    </CardTitle>
-                    <div className={`p-2 rounded-lg ${stat.color}`}>
-                      <stat.icon className="w-4 h-4" />
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">{stat.value}</p>
-                  </CardContent>
-                </Card>
-              ))}
+              <Card key={i} className="hover:shadow-card transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-xs font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg ${stat.color}`}>
+                    <stat.icon className="w-4 h-4" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-bold">{stat.value}</p>
+                </CardContent>
+              </Card>
+            ))}
         </div>
 
         {/* Grade Filter */}

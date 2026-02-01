@@ -1,15 +1,18 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Users, TrendingUp, Clock } from 'lucide-react';
+import { BookOpen, Users, TrendingUp, Clock, Filter, Book } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GRADE_LABELS } from '@/types/database';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const [filterGrade, setFilterGrade] = useState<string>('all');
   // Fetch stats
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin-stats'],
@@ -33,6 +36,8 @@ export default function AdminDashboard() {
       });
 
       return {
+        books,
+        students,
         totalBooks: books.length,
         readyBooks: books.filter((b) => b.status === 'ready').length,
         processingBooks: books.filter((b) => b.status === 'processing').length,
@@ -43,18 +48,36 @@ export default function AdminDashboard() {
     },
   });
 
+  // Filtered stats
+  const filteredStats = useMemo(() => {
+    if (!stats) return null;
+    if (filterGrade === 'all') return stats;
+
+    const gradeNum = parseInt(filterGrade);
+    const filteredBooks = stats.books.filter(b => b.grade_level === gradeNum);
+    const filteredStudentsCount = stats.studentsByGrade[gradeNum] || 0;
+
+    return {
+      ...stats,
+      totalBooks: filteredBooks.length,
+      readyBooks: filteredBooks.filter(b => b.status === 'ready').length,
+      processingBooks: filteredBooks.filter(b => b.status === 'processing').length,
+      totalStudents: filteredStudentsCount,
+    };
+  }, [stats, filterGrade]);
+
   const statCards = [
     {
       title: 'Total Books',
-      value: stats?.totalBooks || 0,
-      description: `${stats?.readyBooks || 0} ready, ${stats?.processingBooks || 0} processing`,
+      value: filteredStats?.totalBooks || 0,
+      description: `${filteredStats?.readyBooks || 0} ready, ${filteredStats?.processingBooks || 0} processing`,
       icon: BookOpen,
       color: 'bg-primary/10 text-primary',
     },
     {
       title: 'Total Students',
-      value: stats?.totalStudents || 0,
-      description: 'Registered accounts',
+      value: filteredStats?.totalStudents || 0,
+      description: filterGrade === 'all' ? 'Registered accounts' : `Students in ${GRADE_LABELS[parseInt(filterGrade)]}`,
       icon: Users,
       color: 'bg-success/10 text-success',
     },
@@ -77,6 +100,31 @@ export default function AdminDashboard() {
   return (
     <AdminLayout title="Dashboard">
       <div className="space-y-8">
+        {/* Filter bar */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/50 backdrop-blur-sm p-4 rounded-xl border border-slate-100 shadow-sm">
+          <div>
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <Filter className="w-4 h-4 text-primary" />
+              Quick Filter
+            </h2>
+            <p className="text-xs text-muted-foreground">Filter dashboard data by grade level</p>
+          </div>
+
+          <Select value={filterGrade} onValueChange={setFilterGrade}>
+            <SelectTrigger className="w-full sm:w-[200px] bg-white">
+              <SelectValue placeholder="All Grades" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Grades</SelectItem>
+              {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Stats grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {isLoading ? (
@@ -145,6 +193,56 @@ export default function AdminDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Books for selected grade (if filtered) */}
+        {filterGrade !== 'all' && (
+          <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Book className="w-5 h-5 text-primary" />
+                Books for {GRADE_LABELS[parseInt(filterGrade)]}
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/admin/books')}>
+                Manage All
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {filteredStats?.books && filteredStats.books.filter(b => b.grade_level === parseInt(filterGrade)).length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  {filteredStats.books
+                    .filter(b => b.grade_level === parseInt(filterGrade))
+                    .slice(0, 10) // Show top 10
+                    .map((book) => (
+                      <div key={book.id} className="group relative aspect-[3/4] rounded-lg overflow-hidden border bg-muted/30 hover:shadow-md transition-all">
+                        {book.cover_url ? (
+                          <img
+                            src={book.cover_url}
+                            alt={book.title}
+                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <BookOpen className="w-8 h-8 text-muted-foreground/50" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
+                          <p className="text-[10px] font-medium text-white truncate">{book.title}</p>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center bg-slate-50 rounded-lg border border-dashed">
+                  <BookOpen className="w-10 h-10 text-muted-foreground/30 mb-2" />
+                  <p className="text-sm text-muted-foreground">No books uploaded for this grade level yet</p>
+                  <Button variant="link" size="sm" onClick={() => navigate('/admin/books')}>
+                    Click here to upload
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Quick actions */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
