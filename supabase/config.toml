@@ -1,7 +1,13 @@
 project_id = "kpzpuiiagtwajyrfmuzl"
 
 [functions.process-book]
-verify_jwt = true
+verify_jwt = false
 
 [functions.notify-admin]
-verify_jwt = true
+verify_jwt = false
+
+[functions.admin-update-user]
+verify_jwt = false
+
+[functions.github-webhook]
+verify_jwt = false

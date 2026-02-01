@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
-import { hex } from "https://deno.land/std@0.168.0/encoding/hex.ts";
 
 declare const Deno: any;
 
@@ -100,9 +99,10 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
 
-    } catch (error) {
-        console.error('Webhook error:', error.message);
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error('Webhook error:', message);
+        return new Response(JSON.stringify({ error: message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });

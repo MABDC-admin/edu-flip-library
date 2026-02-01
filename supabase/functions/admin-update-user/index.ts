@@ -12,18 +12,37 @@ serve(async (req) => {
     }
 
     try {
+        // Extract and validate Authorization header
+        const authHeader = req.headers.get('Authorization');
+        if (!authHeader?.startsWith('Bearer ')) {
+            return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
+
+        const token = authHeader.replace('Bearer ', '');
+
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-            { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+            { global: { headers: { Authorization: authHeader } } }
         );
 
         // 1. Check if the user calling this function is an ADMIN
+        // CRITICAL: Pass token explicitly when verify_jwt=false (required for Lovable Cloud)
         const {
             data: { user },
-        } = await supabaseClient.auth.getUser();
+            error: authError,
+        } = await supabaseClient.auth.getUser(token);
 
-        if (!user) throw new Error('Not authenticated');
+        if (authError || !user) {
+            console.error('Auth error:', authError);
+            return new Response(JSON.stringify({ error: 'Not authenticated' }), {
+                status: 401,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            });
+        }
 
         const { data: roles } = await supabaseClient
             .from('user_roles')
@@ -76,8 +95,9 @@ serve(async (req) => {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 200,
         });
-    } catch (error) {
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'An unknown error occurred';
+        return new Response(JSON.stringify({ error: message }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
             status: 400,
         });
