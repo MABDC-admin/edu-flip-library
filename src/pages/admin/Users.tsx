@@ -7,7 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Loader2, Shield, UserCog, GraduationCap } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Loader2, Shield, UserCog, GraduationCap, Trash2, KeyRound } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -21,7 +22,9 @@ interface UserRole {
 export default function AdminUsers() {
     const [editingUser, setEditingUser] = useState<Profile | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+    const [newPassword, setNewPassword] = useState('');
 
     const queryClient = useQueryClient();
     const { toast } = useToast();
@@ -89,6 +92,50 @@ export default function AdminUsers() {
         },
     });
 
+    const deleteUserMutation = useMutation({
+        mutationFn: async (userId: string) => {
+            // Note: Supabase Admin API is needed to deleting auth user, but we can delete profile.
+            // However, configured cascading deletes on auth.users -> public.profiles is typical.
+            // Client-side, we can only request to delete from 'profiles' if RLS allows, 
+            // OR use a function.
+            // IF we are avoiding Edge Functions, we can try deleting the profile row.
+            // A trigger or foreign key constraint is often used to cleanup.
+
+            // NOTE FOR USER: This attempts to delete the profile. To fully delete the Auth User without Edge Functions,
+            // the user must delete their own account, OR we need the Edge Function.
+            // I will implement Profile delete here, which usually soft-locks the account if the app relies on profiles.
+
+            const { error } = await supabase.from('profiles').delete().eq('id', userId);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['admin-profiles'] });
+            toast({ title: 'User profile deleted' });
+        },
+        onError: (error) => {
+            toast({ title: 'Delete failed', description: error.message, variant: 'destructive' });
+        }
+    });
+
+    const resetPasswordMutation = useMutation({
+        mutationFn: async ({ userId, password }: { userId: string, password: string }) => {
+            const { data, error } = await supabase.functions.invoke('admin-update-user', {
+                body: { userId, newPassword: password }
+            });
+
+            if (error) throw error;
+            if (data?.error) throw new Error(data.error);
+        },
+        onSuccess: () => {
+            setIsResetDialogOpen(false);
+            setNewPassword('');
+            toast({ title: 'Password reset successfully' });
+        },
+        onError: (error) => {
+            toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
+        }
+    });
+
     return (
         <AdminLayout title="Manage Users">
             <Card>
@@ -117,7 +164,23 @@ export default function AdminUsers() {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        <Button variant="ghost" size="sm" onClick={() => handleEditClick(user)}>Edit Roles</Button>
+                                        <div className="flex items-center gap-2">
+                                            <Button variant="ghost" size="sm" onClick={() => handleEditClick(user)}>Edit Roles</Button>
+                                            <Button variant="ghost" size="icon" title="Reset Password" onClick={() => {
+                                                setEditingUser(user);
+                                                setNewPassword('');
+                                                setIsResetDialogOpen(true);
+                                            }}>
+                                                <KeyRound className="w-4 h-4" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => {
+                                                if (confirm('Are you sure you want to delete this user? This cannot be undone.')) {
+                                                    deleteUserMutation.mutate(user.id);
+                                                }
+                                            }}>
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -164,6 +227,35 @@ export default function AdminUsers() {
                         <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                         <Button onClick={() => editingUser && updateRolesMutation.mutate({ userId: editingUser.id, newRoles: selectedRoles })} disabled={updateRolesMutation.isPending}>
                             {updateRolesMutation.isPending ? 'Saving...' : 'Save Changes'}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reset Password for {editingUser?.name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="new-password">New Password</Label>
+                            <Input
+                                id="new-password"
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="Enter new password (min. 6 chars)"
+                            />
+                        </div>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsResetDialogOpen(false)}>Cancel</Button>
+                        <Button
+                            onClick={() => editingUser && resetPasswordMutation.mutate({ userId: editingUser.id, password: newPassword })}
+                            disabled={resetPasswordMutation.isPending || newPassword.length < 6}
+                        >
+                            {resetPasswordMutation.isPending ? 'Resetting...' : 'Reset Password'}
                         </Button>
                     </div>
                 </DialogContent>
