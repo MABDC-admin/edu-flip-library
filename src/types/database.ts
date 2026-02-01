@@ -93,5 +93,6 @@ export const SUBJECT_LABELS = [
   'MAPEH',
   'TLE',
   'ESP',
-  'Computer'
+  'Computer',
+  'Other'
 ] as const;

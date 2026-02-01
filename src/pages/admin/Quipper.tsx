@@ -45,10 +45,12 @@ export default function AdminQuipper() {
     const [bulkFiles, setBulkFiles] = useState<File[]>([]);
     const [bulkGrade, setBulkGrade] = useState<number>(1);
     const [bulkSubject, setBulkSubject] = useState<string>('Science');
+    const [bulkCustomSubject, setBulkCustomSubject] = useState('');
     const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
     const [tempTitle, setTempTitle] = useState('');
     const [subject, setSubject] = useState<string>('Science');
+    const [customSubject, setCustomSubject] = useState('');
     // Quipper always default to teacher only and source quipper
     const [isTeacherOnly, setIsTeacherOnly] = useState(true);
 
@@ -195,8 +197,11 @@ export default function AdminQuipper() {
             setBulkProgress(p => ({ ...p, currentTitle: title }));
 
             try {
+                // Determine final subject
+                const finalSubject = bulkSubject === 'Other' ? bulkCustomSubject : bulkSubject;
+
                 // Always Quipper, Always Teacher Only (default)
-                await uploadSingleBook(title, bulkGrade, bulkSubject, file, null, true);
+                await uploadSingleBook(title, bulkGrade, finalSubject, file, null, true);
                 setBulkProgress(p => ({ ...p, done: i + 1 }));
             } catch (err) {
                 toast({ title: `Failed: ${title}`, variant: 'destructive' });
@@ -252,6 +257,7 @@ export default function AdminQuipper() {
         setTitle('');
         setGradeLevel(1);
         setSubject('Science');
+        setCustomSubject('');
         setPdfFile(null);
         setCoverFile(null);
         setErrors({});
@@ -262,7 +268,11 @@ export default function AdminQuipper() {
         setEditingBook(book);
         setTitle(book.title);
         setGradeLevel(book.grade_level);
-        setSubject(book.subject || 'Science');
+        // If subject is in labels, select it, otherwise set 'Other' and fill custom
+        const isStandard = SUBJECT_LABELS.includes(book.subject as any);
+        setSubject(isStandard ? book.subject! : 'Other');
+        setCustomSubject(isStandard ? '' : book.subject || '');
+
         setIsTeacherOnly(book.is_teacher_only);
         setIsEditOpen(true);
     };
@@ -276,7 +286,9 @@ export default function AdminQuipper() {
         try {
             formSchema.parse({ title, gradeLevel });
             setErrors({});
-            createBook.mutate({ title, gradeLevel, subject, pdfFile, coverFile, isTeacherOnly });
+
+            const finalSubject = subject === 'Other' ? customSubject : subject;
+            createBook.mutate({ title, gradeLevel, subject: finalSubject, pdfFile, coverFile, isTeacherOnly });
         } catch (error) {
             // Error handling same as Books.tsx
         }
@@ -343,6 +355,16 @@ export default function AdminQuipper() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                        {bulkSubject === 'Other' && (
+                                            <div className="space-y-2">
+                                                <Label>Custom Subject Name</Label>
+                                                <Input
+                                                    value={bulkCustomSubject}
+                                                    onChange={(e) => setBulkCustomSubject(e.target.value)}
+                                                    placeholder="Enter subject name"
+                                                />
+                                            </div>
+                                        )}
                                         <div className="border-2 border-dashed rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
                                             <input type="file" multiple accept=".pdf" onChange={(e) => setBulkFiles(Array.from(e.target.files || []))} className="hidden" id="bulk-pdf-q" />
                                             <label htmlFor="bulk-pdf-q" className="cursor-pointer">
@@ -387,6 +409,16 @@ export default function AdminQuipper() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                        {subject === 'Other' && (
+                                            <div className="space-y-2">
+                                                <Label>Custom Subject Name</Label>
+                                                <Input
+                                                    value={customSubject}
+                                                    onChange={(e) => setCustomSubject(e.target.value)}
+                                                    placeholder="Enter subject name"
+                                                />
+                                            </div>
+                                        )}
                                         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                                             <Label className="text-sm font-medium">Teacher Only?</Label>
                                             <Switch checked={isTeacherOnly} onCheckedChange={setIsTeacherOnly} />
@@ -405,52 +437,54 @@ export default function AdminQuipper() {
                                 </DialogContent>
                             </Dialog>
                         </div>
-                    </div>
-                </div>
+                    </div >
+                </div >
 
                 {/* Content Grid */}
-                <div className="space-y-12">
-                    {sortedGrades.map((grade) => (
-                        <div key={grade} className="space-y-6">
-                            <div className="flex items-center gap-4">
-                                <h2 className="text-xl font-bold text-gradient whitespace-nowrap">{GRADE_LABELS[grade]}</h2>
-                                <div className="h-px w-full bg-slate-200" />
-                                <Badge variant="outline">{groupedBooks?.[grade].length} Modules</Badge>
-                            </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                                {groupedBooks?.[grade].map((book) => (
-                                    <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
-                                        <div className="aspect-[3/4] relative bg-slate-100">
-                                            {book.cover_url ? (
-                                                <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
-                                            ) : (
-                                                <div className="absolute inset-0 flex items-center justify-center text-slate-300">
-                                                    <BookOpen className="w-12 h-12" />
+                < div className="space-y-12" >
+                    {
+                        sortedGrades.map((grade) => (
+                            <div key={grade} className="space-y-6">
+                                <div className="flex items-center gap-4">
+                                    <h2 className="text-xl font-bold text-gradient whitespace-nowrap">{GRADE_LABELS[grade]}</h2>
+                                    <div className="h-px w-full bg-slate-200" />
+                                    <Badge variant="outline">{groupedBooks?.[grade].length} Modules</Badge>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                                    {groupedBooks?.[grade].map((book) => (
+                                        <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
+                                            <div className="aspect-[3/4] relative bg-slate-100">
+                                                {book.cover_url ? (
+                                                    <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                                                        <BookOpen className="w-12 h-12" />
+                                                    </div>
+                                                )}
+                                                <div className="absolute top-2 left-2 flex gap-1">
+                                                    {getStatusBadge(book.status)}
                                                 </div>
-                                            )}
-                                            <div className="absolute top-2 left-2 flex gap-1">
-                                                {getStatusBadge(book.status)}
+                                                <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+                                                    {book.is_teacher_only && <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg"><Lock className="w-3 h-3" /></div>}
+                                                </div>
+                                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                                    <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}><BookOpen className="w-4 h-4" /></Button>
+                                                    <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)}><RefreshCw className="w-4 h-4" /></Button>
+                                                    <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}><Edit2 className="w-4 h-4" /></Button>
+                                                    <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}><Trash2 className="w-4 h-4" /></Button>
+                                                </div>
                                             </div>
-                                            <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
-                                                {book.is_teacher_only && <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg"><Lock className="w-3 h-3" /></div>}
+                                            <div className="p-3">
+                                                <h3 className="font-semibold text-sm truncate" title={book.title}>{book.title}</h3>
                                             </div>
-                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}><BookOpen className="w-4 h-4" /></Button>
-                                                <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)}><RefreshCw className="w-4 h-4" /></Button>
-                                                <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}><Edit2 className="w-4 h-4" /></Button>
-                                                <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}><Trash2 className="w-4 h-4" /></Button>
-                                            </div>
-                                        </div>
-                                        <div className="p-3">
-                                            <h3 className="font-semibold text-sm truncate" title={book.title}>{book.title}</h3>
-                                        </div>
-                                    </Card>
-                                ))}
+                                        </Card>
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </AdminLayout>
+                        ))
+                    }
+                </div >
+            </div >
+        </AdminLayout >
     );
 }
