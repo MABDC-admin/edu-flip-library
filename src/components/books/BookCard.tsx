@@ -1,8 +1,6 @@
 import { BookWithProgress, GRADE_LABELS } from '@/types/database';
 import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { BookOpen, Check } from 'lucide-react';
+import { BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Link } from 'react-router-dom';
 
@@ -28,16 +26,8 @@ const gradeColorClasses: Record<number, string> = {
 };
 
 export function BookCard({ book, className, style }: BookCardProps) {
-  const progress = book.reading_progress;
-  const progressPercent = progress && book.page_count > 0
-    ? Math.round((progress.current_page / book.page_count) * 100)
-    : 0;
-  
-  const isCompleted = progress?.completed || progressPercent >= 100;
-  const isStarted = progress && progress.current_page > 1;
-  
   const gradeColor = gradeColorClasses[book.grade_level] || gradeColorClasses[1];
-  
+
   return (
     <Link to={`/read/${book.id}`} style={style}>
       <Card className={cn(
@@ -62,22 +52,15 @@ export function BookCard({ book, className, style }: BookCardProps) {
               <BookOpen className="w-16 h-16 text-white/50" />
             </div>
           )}
-          
+
           {/* Grade badge */}
-          <Badge className="absolute top-2 left-2 bg-white/90 text-foreground font-semibold">
+          <div className="absolute top-2 left-2 bg-white/90 text-foreground px-2 py-0.5 rounded text-xs font-semibold">
             {GRADE_LABELS[book.grade_level]}
-          </Badge>
-          
-          {/* Completion badge */}
-          {isCompleted && (
-            <div className="absolute top-2 right-2 w-8 h-8 rounded-full bg-success flex items-center justify-center shadow-lg">
-              <Check className="w-5 h-5 text-success-foreground" />
-            </div>
-          )}
-          
+          </div>
+
           {/* 3D book spine effect */}
           <div className="absolute right-0 top-0 bottom-0 w-3 bg-gradient-to-l from-black/20 to-transparent" />
-          
+
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
             <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-3 shadow-lg">
@@ -85,33 +68,17 @@ export function BookCard({ book, className, style }: BookCardProps) {
             </div>
           </div>
         </div>
-        
+
         {/* Book info */}
         <div className="p-4 space-y-2">
           <h3 className="font-display font-semibold text-lg line-clamp-2 group-hover:text-primary transition-colors">
             {book.title}
           </h3>
-          
+
           <p className="text-sm text-muted-foreground">
             {book.page_count} pages
           </p>
-          
-          {/* Progress bar */}
-          {isStarted && !isCompleted && (
-            <div className="space-y-1">
-              <Progress value={progressPercent} className="h-2" />
-              <p className="text-xs text-muted-foreground text-right">
-                {progressPercent}% complete
-              </p>
-            </div>
-          )}
-          
-          {isCompleted && (
-            <p className="text-sm font-medium text-success flex items-center gap-1">
-              <Check className="w-4 h-4" />
-              Completed!
-            </p>
-          )}
+
         </div>
       </Card>
     </Link>

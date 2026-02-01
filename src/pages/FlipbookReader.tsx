@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useBook, useBookPages, useReadingProgress, useUpdateReadingProgress } from '@/hooks/useBooks';
+import { useBook, useBookPages } from '@/hooks/useBooks';
 import { Button } from '@/components/ui/button';
 import {
   ChevronLeft,
@@ -71,8 +71,6 @@ export default function FlipbookReader() {
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
   const { data: pages } = useBookPages(bookId);
-  const { data: progress } = useReadingProgress(bookId);
-  const updateProgress = useUpdateReadingProgress();
 
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -121,38 +119,11 @@ export default function FlipbookReader() {
   // Fetch pages and reading progress hooks are already active via react-query
 
 
-  // Initialize from saved progress
-  useEffect(() => {
-    if (progress?.current_page) {
-      setCurrentPage(progress.current_page);
-      // Flip to saved page after flipbook initializes
-      setTimeout(() => {
-        if (flipBookRef.current?.pageFlip()) {
-          flipBookRef.current.pageFlip().turnToPage(progress.current_page - 1);
-        }
-      }, 500);
-    }
-  }, [progress]);
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setNumPages(numPages);
   }
 
-  // Save progress on page change
-  const saveProgress = useCallback((page: number) => {
-    if (!bookId || !book) return;
-    const totalPagesCount = numPages || book.page_count || 1;
-    const completed = page >= totalPagesCount;
-    updateProgress.mutate({ bookId, currentPage: page, completed });
-  }, [bookId, book, numPages, updateProgress]);
-
-  // Debounced progress save
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      saveProgress(currentPage);
-    }, 1000);
-    return () => clearTimeout(timeout);
-  }, [currentPage, saveProgress]);
 
   // Resolve the full PDF URL for react-pdf
   const pdfUrl = book?.pdf_url ? supabase.storage.from('pdf-uploads').getPublicUrl(book.pdf_url).data.publicUrl : null;

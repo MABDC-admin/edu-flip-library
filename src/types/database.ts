@@ -41,20 +41,8 @@ export interface BookPage {
   created_at: string;
 }
 
-export interface ReadingProgress {
-  id: string;
-  student_id: string;
-  book_id: string;
-  current_page: number;
-  completed: boolean;
-  last_read_at: string;
-  created_at: string;
-  updated_at: string;
-}
-
 // Extended types with relations
 export interface BookWithProgress extends Book {
-  reading_progress?: ReadingProgress | null;
 }
 
 export interface BookWithPages extends Book {
