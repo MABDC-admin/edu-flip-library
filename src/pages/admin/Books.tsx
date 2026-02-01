@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X, Lock, Globe } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X, Lock, Globe, RefreshCw } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -281,6 +281,28 @@ export default function AdminBooks() {
         variant: 'destructive',
       });
     },
+  });
+
+  const reprocessBook = useMutation({
+    mutationFn: async (book: BookWithProgress) => {
+      if (!book.pdf_url) throw new Error("No PDF found for this book");
+
+      const { data, error } = await supabase.storage.from("pdf-uploads").download(book.pdf_url);
+      if (error) throw error;
+
+      const file = new File([data], "source.pdf", { type: "application/pdf" });
+      await processInBrowser(book.id, file);
+
+      // Ensure status is ready
+      await supabase.from('books').update({ status: 'ready' }).eq('id', book.id);
+    },
+    onSuccess: () => {
+      toast({ title: 'Book reprocessed successfully', description: 'Cover and pages have been regenerated.' });
+      queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+    },
+    onError: (error) => {
+      toast({ title: 'Reprocess failed', description: error.message, variant: 'destructive' });
+    }
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -719,6 +741,9 @@ export default function AdminBooks() {
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                           <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
                             <BookOpen className="w-4 h-4" />
+                          </Button>
+                          <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)} title="Reprocess (Fix Cover/Pages)">
+                            {reprocessBook.isPending && reprocessBook.variables?.id === book.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                           </Button>
                           <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}>
                             <Edit2 className="w-4 h-4" />

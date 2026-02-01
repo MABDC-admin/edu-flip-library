@@ -100,6 +100,15 @@ export function usePdfToImages() {
 
             if (insertError) throw insertError;
 
+            // IMMEDIATE UPDATE: If this is page 1, set it as the cover immediately to avoid missing covers
+            if (pNum === 1) {
+              const { data: { publicUrl: firstPageUrl } } = supabase.storage.from("book-pages").getPublicUrl(imagePath);
+              await supabase.from('books').update({
+                cover_url: firstPageUrl,
+                status: numPages === 1 ? 'ready' : 'processing' // If 1 page, ready. Else keep processing.
+              }).eq('id', bookId);
+            }
+
             setProgress((p) => ({
               ...p,
               done: p.done + 1,
