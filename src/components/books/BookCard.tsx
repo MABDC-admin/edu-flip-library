@@ -75,9 +75,6 @@ export function BookCard({ book, className, style }: BookCardProps) {
             {book.title}
           </h3>
 
-          <p className="text-sm text-muted-foreground">
-            {book.page_count} pages
-          </p>
 
         </div>
       </Card>
