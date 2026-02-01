@@ -69,6 +69,17 @@ export default function AdminBooks() {
     return matchesSearch && matchesGrade;
   });
 
+  // Group books by grade
+  const groupedBooks = filteredBooks?.reduce((acc, book) => {
+    const grade = book.grade_level;
+    if (!acc[grade]) acc[grade] = [];
+    acc[grade].push(book);
+    return acc;
+  }, {} as Record<number, Book[]>);
+
+  // Sort grades ascending
+  const sortedGrades = groupedBooks ? Object.keys(groupedBooks).map(Number).sort((a, b) => a - b) : [];
+
   const updateBook = useMutation({
     mutationFn: async ({ id, title, gradeLevel }: { id: string; title: string; gradeLevel: number }) => {
       const { data, error } = await supabase
@@ -526,178 +537,186 @@ export default function AdminBooks() {
             ))}
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-            {filteredBooks?.map((book) => (
-              <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
-                <div className="aspect-[3/4] relative bg-slate-100">
-                  {book.cover_url ? (
-                    <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
-                  ) : (
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-300">
-                      <BookOpen className="w-12 h-12" />
-                    </div>
-                  )}
-                  <div className="absolute top-2 left-2 flex gap-1">
-                    {getStatusBadge(book.status)}
-                    <Badge variant="secondary" className="bg-white/90 text-[10px]">{GRADE_LABELS[book.grade_level]}</Badge>
-                  </div>
-                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                    <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
-                      <BookOpen className="w-4 h-4" />
-                    </Button>
-                    <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
+          <div className="space-y-12">
+            {sortedGrades.map((grade) => (
+              <div key={grade} className="space-y-6">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-xl font-bold text-gradient whitespace-nowrap">
+                    {GRADE_LABELS[grade]}
+                  </h2>
+                  <div className="h-px w-full bg-slate-200" />
+                  <Badge variant="outline" className="whitespace-nowrap">
+                    {groupedBooks?.[grade].length} Books
+                  </Badge>
                 </div>
-                <div className="p-3">
-                  {editingTitleId === book.id ? (
-                    <div className="flex items-center gap-1">
-                      <Input
-                        value={tempTitle}
-                        onChange={(e) => setTempTitle(e.target.value)}
-                        className="h-8 text-sm"
-                        autoFocus
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-success"
-                        onClick={() => {
-                          updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
-                          setEditingTitleId(null);
-                        }}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => setEditingTitleId(null)}
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div
-                      className="flex items-center justify-between cursor-pointer group/title"
-                      onClick={() => {
-                        setEditingTitleId(book.id);
-                        setTempTitle(book.title);
-                      }}
-                    >
-                      <h3 className="font-semibold text-sm truncate pr-2">{book.title}</h3>
-                      <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
-                    </div>
-                  )}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                  {groupedBooks?.[grade].map((book) => (
+                    <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
+                      <div className="aspect-[3/4] relative bg-slate-100">
+                        {book.cover_url ? (
+                          <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-slate-300">
+                            <BookOpen className="w-12 h-12" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 left-2 flex gap-1">
+                          {getStatusBadge(book.status)}
+                        </div>
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                          <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
+                            <BookOpen className="w-4 h-4" />
+                          </Button>
+                          <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        {editingTitleId === book.id ? (
+                          <div className="flex items-center gap-1">
+                            <Input
+                              value={tempTitle}
+                              onChange={(e) => setTempTitle(e.target.value)}
+                              className="h-8 text-sm"
+                              autoFocus
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-success"
+                              onClick={() => {
+                                updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
+                                setEditingTitleId(null);
+                              }}
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => setEditingTitleId(null)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div
+                            className="flex items-center justify-between cursor-pointer group/title"
+                            onClick={() => {
+                              setEditingTitleId(book.id);
+                              setTempTitle(book.title);
+                            }}
+                          >
+                            <h3 className="font-semibold text-sm truncate pr-2">{book.title}</h3>
+                            <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
+                          </div>
+                        )}
+                      </div>
+                    </Card>
+                  ))}
                 </div>
-              </Card>
+              </div>
             ))}
           </div>
         ) : (
-          <Card>
-            <CardContent className="p-0">
-              {books && books.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Grade</TableHead>
-                      <TableHead>Pages</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredBooks?.map((book) => (
-                      <TableRow key={book.id}>
-                        <TableCell className="font-medium">
-                          {editingTitleId === book.id ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={tempTitle}
-                                onChange={(e) => setTempTitle(e.target.value)}
-                                className="h-8 w-48"
-                                autoFocus
-                              />
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
-                                  setEditingTitleId(null);
-                                }}
-                              >
-                                <Check className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3 group/title cursor-pointer" onClick={() => { setEditingTitleId(book.id); setTempTitle(book.title); }}>
-                              <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-                                <BookOpen className="w-4 h-4 text-primary" />
-                              </div>
-                              {book.title}
-                              <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>{GRADE_LABELS[book.grade_level] || 'N/A'}</TableCell>
-                        <TableCell>{book.page_count}</TableCell>
-                        <TableCell>{getStatusBadge(book.status)}</TableCell>
-                        <TableCell className="text-muted-foreground text-xs">
-                          {new Date(book.created_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingBook(book);
-                                setTitle(book.title);
-                                setGradeLevel(book.grade_level);
-                                setIsEditOpen(true);
-                              }}
-                              className="text-accent"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => navigate(`/read/${book.id}`)}
-                              className="text-primary"
-                            >
-                              <BookOpen className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => deleteBook.mutate(book.id)}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="p-12 text-center">
-                  <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No books found</h3>
-                  <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary mt-4">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Your First Book
-                  </Button>
+          <div className="space-y-8">
+            {sortedGrades.map((grade) => (
+              <div key={grade} className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <h2 className="text-lg font-semibold">{GRADE_LABELS[grade]}</h2>
+                  <div className="h-px flex-1 bg-slate-100" />
                 </div>
-              )}
-            </CardContent>
-          </Card>
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Title</TableHead>
+                          <TableHead>Pages</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {groupedBooks?.[grade].map((book) => (
+                          <TableRow key={book.id}>
+                            <TableCell className="font-medium">
+                              {editingTitleId === book.id ? (
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={tempTitle}
+                                    onChange={(e) => setTempTitle(e.target.value)}
+                                    className="h-8 w-48"
+                                    autoFocus
+                                  />
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
+                                      setEditingTitleId(null);
+                                    }}
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-3 group/title cursor-pointer" onClick={() => { setEditingTitleId(book.id); setTempTitle(book.title); }}>
+                                  <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
+                                    <BookOpen className="w-4 h-4 text-primary" />
+                                  </div>
+                                  {book.title}
+                                  <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell>{book.page_count}</TableCell>
+                            <TableCell>{getStatusBadge(book.status)}</TableCell>
+                            <TableCell className="text-muted-foreground text-xs">
+                              {new Date(book.created_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => navigate(`/read/${book.id}`)}
+                                >
+                                  <BookOpen className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => deleteBook.mutate(book.id)}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </div>
+            ))}
+            {(!books || books.length === 0) && (
+              <div className="p-12 text-center bg-white rounded-xl border border-dashed">
+                <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-20" />
+                <h3 className="text-lg font-semibold mb-2">No books found</h3>
+                <p className="text-muted-foreground mb-6">Add your first book to get started!</p>
+                <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add New Book
+                </Button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Edit Dialog */}
