@@ -18,7 +18,7 @@ export default function AdminDashboard() {
     queryKey: ['admin-stats'],
     queryFn: async () => {
       const [booksResult, studentsResult, progressResult] = await Promise.all([
-        supabase.from('books').select('id, grade_level, status'),
+        supabase.from('books').select('id, title, grade_level, status, cover_url'),
         supabase.from('profiles').select('id, grade_level'),
         supabase.from('reading_progress').select('id, completed, last_read_at').order('last_read_at', { ascending: false }).limit(10),
       ]);
