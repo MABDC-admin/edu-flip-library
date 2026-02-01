@@ -17,45 +17,6 @@ export default function AdminDashboard() {
   const [filterGrade, setFilterGrade] = useState<string>('all');
   const [filterSource, setFilterSource] = useState<string>('all');
   const { toast } = useToast();
-  const [isTestEmailLoading, setIsTestEmailLoading] = useState(false);
-
-  const sendTestEmail = async () => {
-    setIsTestEmailLoading(true);
-    try {
-      console.log('Sending test email via raw fetch...');
-      const session = (await supabase.auth.getSession()).data.session;
-      const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/notify-admin`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`,
-          'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ type: 'test', user_email: 'Admin', user_role: 'admin' })
-      });
-
-      const responseData = await response.json().catch(() => ({}));
-      console.log('Raw fetch response:', { status: response.status, data: responseData });
-
-      if (!response.ok) {
-        // Handle explicit Resend error details if present
-        const resendError = responseData.details?.message || responseData.error || `HTTP Error ${response.status}`;
-        throw new Error(resendError);
-      }
-
-      toast({ title: "Test Email Sent", description: "Check your inbox (and spam folder)." });
-    } catch (err: any) {
-      console.error('Test Email Error:', err);
-      // Show more descriptive error message to the user
-      toast({
-        title: "Test Failed",
-        description: err.message || "Unknown error occurred during sending.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsTestEmailLoading(false);
-    }
-  };
 
   // Fetch stats
   const { data: stats, isLoading } = useQuery({

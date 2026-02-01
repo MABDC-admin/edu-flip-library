@@ -79,7 +79,6 @@ export default function FlipbookReader() {
   useEffect(() => {
     if (book && user && !notificationSentRef.current) {
       notificationSentRef.current = true;
-      console.log('Book accessed, invoking notify-admin...', { book: book.title, user: user.email });
       supabase.functions.invoke('notify-admin', {
         body: {
           type: 'read',
@@ -87,9 +86,6 @@ export default function FlipbookReader() {
           user_role: role || 'student',
           book_title: book.title,
         }
-      }).then(({ data, error }) => {
-        if (error) console.error('Failed to invoke notify-admin on read:', error);
-        else console.log('notify-admin response (read):', data);
       }).catch(console.error);
     }
   }, [book, user, role]);
