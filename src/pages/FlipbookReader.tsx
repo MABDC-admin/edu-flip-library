@@ -31,7 +31,7 @@ import HTMLFlipBook from 'react-pageflip';
 
 // Worker is configured globally in src/lib/pdf-config.ts
 
-// Optimize PDF loading options
+// PDF loading options used by Document component
 const pdfOptions = {
   cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
   cMapPacked: true,
@@ -416,6 +416,7 @@ export default function FlipbookReader() {
               onLoadSuccess={onDocumentLoadSuccess}
               loading={<div />}
               error={<div>Error loading PDF</div>}
+              options={pdfOptions}
             />
           </div>
         )}

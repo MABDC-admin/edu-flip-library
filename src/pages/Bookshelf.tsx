@@ -9,7 +9,7 @@ import { GRADE_LABELS } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Bookshelf() {
-  const { user, profile, signOut, isAdmin } = useAuth();
+  const { user, profile, signOut, isAdmin, isTeacher } = useAuth();
   const { data: books, isLoading } = useBooks();
   const navigate = useNavigate();
 
@@ -56,6 +56,18 @@ export default function Bookshelf() {
                 {profile?.grade_level ? GRADE_LABELS[profile.grade_level] : 'Student'}
               </p>
             </div>
+
+            {isTeacher && !isAdmin && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => navigate('/teacher')}
+                className="gradient-primary hidden sm:flex"
+              >
+                <BookOpen className="w-4 h-4 mr-2" />
+                Teacher Dashboard
+              </Button>
+            )}
 
             {isAdmin && (
               <div className="hidden sm:flex items-center gap-2">
