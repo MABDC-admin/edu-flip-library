@@ -2,8 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const NOTIFY_EMAIL = "sottodennis@gmail.com";
-// Fallback to onboarding@resend.dev if domain not verified
-const SENDER_EMAIL = Deno.env.get("SENDER_EMAIL") || "onboarding@resend.dev";
+const SENDER_EMAIL = "ebook@mabdc.com";
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
