@@ -313,25 +313,6 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          <Card
-            className="hover:shadow-card transition-shadow cursor-pointer group relative overflow-hidden"
-            onClick={sendTestEmail}
-          >
-            <CardContent className="flex items-center gap-4 p-6">
-              <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center group-hover:scale-110 transition-transform">
-                {isTestEmailLoading ? <Loader2 className="w-6 h-6 text-orange-500 animate-spin" /> : <Mail className="w-6 h-6 text-orange-500" />}
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-lg">Test Email Notification</h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  Check if system emails are delivering correctly
-                </p>
-                <Button size="sm" variant="secondary" disabled={isTestEmailLoading}>
-                  {isTestEmailLoading ? "Sending..." : "Send Test Email"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </AdminLayout >
