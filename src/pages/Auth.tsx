@@ -30,15 +30,15 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { signIn, signUp, user } = useAuth();
+  const { signIn, signUp, user, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (user) {
-      navigate('/');
+    if (!isLoading && user) {
+      navigate('/', { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, isLoading, navigate]);
 
   const validateForm = () => {
     try {
@@ -92,7 +92,7 @@ export default function Auth() {
             title: 'Welcome back! 📚',
             description: 'Successfully logged in.',
           });
-          navigate('/');
+          // Navigation will be handled by useEffect
         }
       } else {
         const { error } = await signUp(email, password, name, gradeLevel);

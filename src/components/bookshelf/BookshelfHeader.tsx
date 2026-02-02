@@ -16,8 +16,8 @@ export function BookshelfHeader({ profile, isAdmin, isTeacher, onSignOut }: Book
     const { school } = useAuth();
 
     return (
-        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b">
-            <div className="container mx-auto px-4 py-2 flex items-center justify-between">
+        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b min-h-[60px]">
+            <div className="container mx-auto px-4 py-2 flex items-center justify-between h-full">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center border shadow-sm cursor-pointer bg-white" onClick={() => navigate('/')}>

@@ -26,7 +26,7 @@ export default function Bookshelf() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/auth');
+      navigate('/auth', { replace: true });
     }
   }, [authLoading, user, navigate]);
 
@@ -56,7 +56,7 @@ export default function Bookshelf() {
         onSignOut={handleSignOut}
       />
 
-      <div className="container mx-auto px-4 flex gap-6 lg:gap-8">
+      <div className="container mx-auto px-4 flex gap-6 lg:gap-8 will-change-auto">
         {showSidebar && (
           <div className="pt-2 lg:pt-3">
             <GradeSidebar
