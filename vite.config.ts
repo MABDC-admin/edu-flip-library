@@ -16,7 +16,6 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    mode === "development" && componentTagger(),
     visualizer({ open: false, filename: "bundle-analysis.html" }),
     VitePWA({
       registerType: "autoUpdate",
