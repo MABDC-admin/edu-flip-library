@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Auth from "./pages/Auth";
 import Bookshelf from "./pages/Bookshelf";
@@ -35,7 +35,7 @@ const App = () => (
           <Toaster />
           <Sonner />
           <Routes>
-            <Route path="/" element={<Bookshelf />} />
+            <Route path="/" element={<Navigate to="/bookshelf" replace />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/bookshelf" element={<Bookshelf />} />
             <Route path="/read/:bookId" element={<FlipbookReader />} />
