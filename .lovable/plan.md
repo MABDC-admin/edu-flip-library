@@ -1,30 +1,44 @@
 
-# Set Default Flipbook Zoom to 175%
 
-## Overview
-Change the initial zoom level of the flipbook reader from 100% (1.0) to 175% (1.75) so books open at a more readable size by default.
+# Plan: Link Grade 7 Students to MABDC School
 
-## Change Required
+## Current Status
+All 37 student accounts already exist in the database with:
+- Email addresses: g7nieva@gmail.com through g7narciso@gmail.com
+- Password: 123456
+- Grade Level: 7 (correctly set)
+- **school_id: NULL** (needs to be updated)
+- **academic_year_id: NULL** (needs to be updated)
 
-**File:** `src/pages/FlipbookReader.tsx`
+## Required Action
+Update the `profiles` table to assign these students to MABDC school with the active academic year.
 
-**Current code (line 80):**
-```typescript
-const [zoom, setZoom] = useState(1);
+## Database Details
+| Field | Value |
+|-------|-------|
+| MABDC School ID | `15f61d03-8aa8-422a-9faa-afbc8099adce` |
+| Active Academic Year | `07d916be-d44f-426f-853d-260bb38e4208` (2026-2027) |
+| Total Students | 37 |
+
+## Implementation Steps
+
+### Step 1: Update Profiles
+Execute a single SQL UPDATE to assign all 37 students to MABDC:
+
+```sql
+UPDATE profiles 
+SET 
+  school_id = '15f61d03-8aa8-422a-9faa-afbc8099adce',
+  academic_year_id = '07d916be-d44f-426f-853d-260bb38e4208'
+WHERE email LIKE 'g7%@gmail.com';
 ```
 
-**New code:**
-```typescript
-const [zoom, setZoom] = useState(1.75);
-```
+### Step 2: Verify Update
+Query the profiles table to confirm all students now have the correct school and academic year assignments.
 
-## Technical Details
-- The zoom value is a multiplier applied via CSS transform: `style={{ transform: \`scale(${zoom})\` }}`
-- Current zoom bounds are 0.5 (50%) minimum and 3.0 (300%) maximum
-- The new default of 1.75 is within these bounds
-- Users can still adjust zoom using the ZoomIn/ZoomOut buttons in the footer toolbar
+## Expected Result
+After the update, all 37 Grade 7 students will:
+- Be linked to MABDC school
+- Be assigned to the 2026-2027 academic year
+- Be able to log in and access Grade 7 books for MABDC
 
-## Impact
-- All books will now open at 175% zoom by default
-- This provides a more readable experience, especially on larger screens
-- Users retain full control to zoom in/out as needed
