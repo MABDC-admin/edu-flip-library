@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,7 +10,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { Badge } from '@/components/ui/badge';
 
 // DepEd Transmutation Table (Simplified for K-12)
 // Source: DepEd Order No. 8, s. 2015
@@ -189,13 +188,14 @@ export default function AdminGrades() {
     const saveMutation = useMutation({
         mutationFn: async () => {
             if (!selectedClassId || !gradeSheet) return;
+            if (!school?.id || !academicYear?.id) throw new Error("School or academic year not selected");
 
             const upserts = Object.keys(gradesBuffer).map(studentId => {
                 const g = gradesBuffer[studentId];
                 return {
                     id: g.id, // Include if updating existing
-                    school_id: school?.id,
-                    academic_year_id: academicYear?.id,
+                    school_id: school.id,
+                    academic_year_id: academicYear.id,
                     class_id: selectedClassId,
                     student_id: studentId,
                     quarter: parseInt(selectedQuarter),
@@ -321,7 +321,7 @@ export default function AdminGrades() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {gradeSheet.map(({ student }) => {
+                                    {gradeSheet?.map(({ student }) => {
                                         const g = gradesBuffer[student.id];
                                         if (!g) return null;
                                         return (
