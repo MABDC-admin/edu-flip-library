@@ -83,10 +83,19 @@ export default function FlipbookReader() {
     }
   }, [book, user, role]);
 
+  const getInitialZoom = () => {
+    if (typeof window === 'undefined') return 1.75;
+    const width = window.innerWidth;
+    if (width < 768) return 1.5;      // Mobile: 150%
+    if (width < 1024) return 1.75;    // Tablet: 175%
+    return 2.0;                        // Desktop: 200%
+  };
+
   const [numPages, setNumPages] = useState<number>(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [zoom, setZoom] = useState(2.0);
+  const [zoom, setZoom] = useState(getInitialZoom);
+  const userChangedZoom = useRef(false);
   const [viewMode, setViewMode] = useState<'single' | 'double'>('single');
   const [flipbookDimensions, setFlipbookDimensions] = useState({ width: 400, height: 566 });
   const containerRef = useRef<HTMLDivElement>(null);
@@ -207,6 +216,21 @@ export default function FlipbookReader() {
     };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Update zoom on resize only if user hasn't manually adjusted
+  useEffect(() => {
+    const handleResize = () => {
+      if (!userChangedZoom.current) {
+        const width = window.innerWidth;
+        if (width < 768) setZoom(1.5);
+        else if (width < 1024) setZoom(1.75);
+        else setZoom(2.0);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const touchStartX = useRef<number | null>(null);
@@ -443,8 +467,14 @@ export default function FlipbookReader() {
 
       <ReaderControls
         zoom={zoom}
-        onZoomIn={() => setZoom((z) => Math.min(z + 0.25, 3))}
-        onZoomOut={() => setZoom((z) => Math.max(z - 0.25, 0.5))}
+        onZoomIn={() => {
+          userChangedZoom.current = true;
+          setZoom((z) => Math.min(z + 0.25, 3));
+        }}
+        onZoomOut={() => {
+          userChangedZoom.current = true;
+          setZoom((z) => Math.max(z - 0.25, 0.5));
+        }}
         pdfUrl={pdfUrl}
         isVisible={!isMaximized}
       />
