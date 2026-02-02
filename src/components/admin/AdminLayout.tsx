@@ -119,11 +119,12 @@ export function AdminLayout({ children }: AdminLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Mobile menu button */}
-      <div className="lg:hidden fixed top-4 left-4 z-50">
+      {/* Mobile menu button - isolated with will-change to prevent layout shifts */}
+      <div className="lg:hidden fixed top-4 left-4 z-50 will-change-transform">
         <Button
           variant="outline"
           size="icon"
+          className="w-10 h-10 shadow-md bg-background"
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
         >
           {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -290,22 +291,22 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <DropdownMenu>
+          <div className="flex items-center gap-4 will-change-transform">
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 flex items-center gap-3 px-2 hover:bg-blue-800 rounded-full transition-all">
-                  <div className="flex flex-col items-end hidden sm:flex">
+                <Button variant="ghost" className="relative h-10 flex items-center gap-3 px-2 hover:bg-blue-800 rounded-full transition-colors">
+                  <div className="flex-col items-end hidden sm:flex">
                     <span className="text-xs font-bold text-white leading-tight">{profile?.name || 'Admin User'}</span>
                     <span className="text-[10px] text-blue-300 leading-tight">Administrator</span>
                   </div>
-                  <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-blue-500/50 flex items-center justify-center shadow-lg group-hover:border-white transition-colors">
+                  <div className="w-9 h-9 rounded-full bg-blue-600 border-2 border-blue-500/50 flex items-center justify-center shadow-lg">
                     <span className="text-xs font-bold text-white">
                       {profile?.name?.charAt(0).toUpperCase() || 'A'}
                     </span>
                   </div>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56 mt-1">
+              <DropdownMenuContent align="end" className="w-56 mt-1" sideOffset={8}>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-bold leading-none">{profile?.name}</p>
