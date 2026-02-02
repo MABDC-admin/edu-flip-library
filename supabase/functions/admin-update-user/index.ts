@@ -30,7 +30,7 @@ serve(async (req) => {
         );
 
         // 1. Check if the user calling this function is an ADMIN
-        // CRITICAL: Pass token explicitly when verify_jwt=false (required for Lovable Cloud)
+        // CRITICAL: Pass token explicitly when verify_jwt=false (required for external cloud deployment)
         const {
             data: { user },
             error: authError,

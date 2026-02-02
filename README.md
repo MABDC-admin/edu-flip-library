@@ -1,22 +1,14 @@
-# Welcome to your Lovable project
+# EduFlip Library - K-12 Educational Platform
 
-## Project info
+## Project Info
 
+EduFlip is a comprehensive K-12 educational platform that provides interactive digital flipbook reading experiences for students. Built with modern web technologies, it enables schools to deliver engaging educational content.
 
+## How to Contribute
 
-## How can I edit this code?
+There are several ways to contribute to this educational platform:
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+**Local Development Setup**
 
 The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
 
@@ -36,6 +28,10 @@ npm i
 npm run dev
 ```
 
+**Use your preferred IDE**
+
+Work directly with the codebase using your preferred IDE. Push changes directly to GitHub to keep the project updated.
+
 **Edit a file directly in GitHub**
 
 - Navigate to the desired file(s).
@@ -50,7 +46,7 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
-## What technologies are used for this project?
+## Technologies Used
 
 This project is built with:
 
@@ -59,15 +55,15 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase for backend services
+- React Router for navigation
 
-## How can I deploy this project?
+## Deployment Options
 
+This project can be deployed to various platforms like Vercel, Netlify, or any Node.js hosting service.
 
+Configure your hosting platform to connect to this GitHub repository.
 
-## Can I connect a custom domain to my Lovable project?
+## Project Purpose
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-
+This educational platform is designed to enhance learning experiences for K-12 students by providing interactive digital textbooks and reading materials. It includes features for multi-school support, grade-level appropriate content, and student progress tracking.
