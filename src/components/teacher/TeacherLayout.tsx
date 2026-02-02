@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { BookOpen, LogOut, GraduationCap, LayoutDashboard } from 'lucide-react';
@@ -12,6 +12,7 @@ interface TeacherLayoutProps {
 export function TeacherLayout({ children }: TeacherLayoutProps) {
   const { profile, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleSignOut = async () => {
     await signOut();
@@ -47,15 +48,17 @@ export function TeacherLayout({ children }: TeacherLayoutProps) {
                 <LayoutDashboard className="w-4 h-4" />
                 Dashboard
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => navigate('/bookshelf')}
-                className="gap-2"
-              >
-                <BookOpen className="w-4 h-4" />
-                Student View
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate('/bookshelf')}
+                  className="gap-2"
+                >
+                  <BookOpen className="w-4 h-4" />
+                  Student View
+                </Button>
+              )}
             </nav>
 
             <div className="text-right hidden sm:block">

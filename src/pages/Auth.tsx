@@ -30,15 +30,20 @@ export default function Auth() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const { signIn, signUp, user, isLoading } = useAuth();
+  const { signIn, signUp, user, isLoading, isTeacher, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     if (!isLoading && user) {
-      navigate('/', { replace: true });
+      // Redirect teachers and admins to their dashboard, others to bookshelf
+      if (isTeacher || isAdmin) {
+        navigate('/teacher', { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
     }
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, isTeacher, isAdmin, navigate]);
 
   const validateForm = () => {
     try {

@@ -18,7 +18,7 @@ export default function TeacherDashboard() {
   const { user, isTeacher, isAdmin, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [selectedGrades, setSelectedGrades] = useState<number[]>([]);
+  const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
   const [selectedBook, setSelectedBook] = useState<BookWithProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedSource, setSelectedSource] = useState<'internal' | 'quipper'>('internal');
@@ -40,16 +40,16 @@ export default function TeacherDashboard() {
     },
   });
 
-  // Filter books by selected grades
+  // Filter books by selected grade
   const filteredBooks = useMemo(() => {
     if (!books) return [];
     let filtered = books;
-    if (selectedGrades.length > 0) {
-      filtered = filtered.filter((book) => selectedGrades.includes(book.grade_level));
+    if (selectedGrade !== null) {
+      filtered = filtered.filter((book) => book.grade_level === selectedGrade);
     }
     filtered = filtered.filter((book) => book.source === selectedSource);
     return filtered;
-  }, [books, selectedGrades, selectedSource]);
+  }, [books, selectedGrade, selectedSource]);
 
   // Group books by grade and then by subject for organized display
   const booksByGrade = useMemo(() => {
@@ -136,14 +136,40 @@ export default function TeacherDashboard() {
             <CardHeader className="pb-4">
               <CardTitle className="text-lg flex items-center gap-2 font-display">
                 <GraduationCap className="w-5 h-5 text-primary" />
-                Filter by Grade Level
+                Select Grade Level
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <GradeFilter
-                selectedGrades={selectedGrades}
-                onGradesChange={setSelectedGrades}
-              />
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((grade) => {
+                  const isSelected = selectedGrade === grade;
+                  return (
+                    <button
+                      key={grade}
+                      onClick={() => setSelectedGrade(isSelected ? null : grade)}
+                      className={cn(
+                        "w-full h-12 rounded-xl text-sm font-semibold transition-all shadow-sm border flex items-center justify-center",
+                        isSelected
+                          ? "bg-primary text-primary-foreground border-primary scale-105"
+                          : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600"
+                      )}
+                    >
+                      {GRADE_LABELS[grade]}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setSelectedGrade(null)}
+                  className={cn(
+                    "w-full h-12 rounded-xl text-sm font-semibold transition-all shadow-sm border flex items-center justify-center",
+                    selectedGrade === null
+                      ? "bg-slate-800 text-white border-slate-800 scale-105"
+                      : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600"
+                  )}
+                >
+                  All Grades
+                </button>
+              </div>
             </CardContent>
           </Card>
         ) : null}
@@ -266,7 +292,7 @@ export default function TeacherDashboard() {
               </div>
             </div>
           </div>
-        ) : selectedGrades.length === 0 ? (
+        ) : selectedGrade === null ? (
           // Show all books in a single folder-like view when no filter
           <div className="space-y-12">
             <h3 className="text-xl font-display font-semibold">

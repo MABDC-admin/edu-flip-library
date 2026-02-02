@@ -27,8 +27,11 @@ export default function Bookshelf() {
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth', { replace: true });
+    } else if (!authLoading && user && isTeacher && !isAdmin) {
+      // Teachers should go to their dashboard instead of bookshelf
+      navigate('/teacher', { replace: true });
     }
-  }, [authLoading, user, navigate]);
+  }, [authLoading, user, isTeacher, isAdmin, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
