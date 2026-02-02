@@ -24,7 +24,7 @@ import AdminSettings from "./pages/admin/Settings";
 import AttendanceScanner from "./pages/AttendanceScanner";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import NotFound from "./pages/NotFound";
-
+import PublicEnrollment from "./pages/public/Enrollment";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -55,6 +55,9 @@ const App = () => (
             <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            {/* Public Routes */}
+            <Route path="/enroll" element={<PublicEnrollment />} />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
