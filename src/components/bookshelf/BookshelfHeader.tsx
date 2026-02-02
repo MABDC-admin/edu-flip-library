@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { LogOut, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { GRADE_LABELS } from '@/types/database';
+import { GRADE_LABELS, Profile } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface BookshelfHeaderProps {

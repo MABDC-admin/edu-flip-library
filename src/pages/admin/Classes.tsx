@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Plus, Trash2, BookOpen, Users, School, GraduationCap, X } from 'lucide-react';
+import { Loader2, Plus, Trash2, BookOpen, Users, X, GraduationCap, Building2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { GRADE_LABELS } from '@/types/database';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function AdminClasses() {
     const { school, academicYear } = useAuth();
@@ -146,7 +145,7 @@ export default function AdminClasses() {
                 .from('profiles')
                 .select('*')
                 .eq('school_id', school.id)
-                .eq('grade_level', gradeLevel)
+                .eq('grade_level', gradeLevel ?? 1)
                 .order('name');
 
             // To properly filter by role, we should ideally join user_roles, but usually profile grade_level implies student
@@ -164,9 +163,10 @@ export default function AdminClasses() {
     // Create Section
     const createSectionMutation = useMutation({
         mutationFn: async (data: typeof newSection) => {
+            if (!school?.id || !academicYear?.id) throw new Error("School or academic year not selected");
             const { error } = await supabase.from('sections').insert({
-                school_id: school?.id,
-                academic_year_id: academicYear?.id,
+                school_id: school.id,
+                academic_year_id: academicYear.id,
                 name: data.name,
                 grade_level: data.gradeLevel,
                 adviser_id: data.adviserId === 'none' ? null : data.adviserId
@@ -186,9 +186,10 @@ export default function AdminClasses() {
     const createClassMutation = useMutation({
         mutationFn: async (data: typeof newClass) => {
             if (!selectedSectionId) throw new Error("No section selected");
+            if (!school?.id || !academicYear?.id) throw new Error("School or academic year not selected");
             const { error } = await supabase.from('classes').insert({
-                school_id: school?.id,
-                academic_year_id: academicYear?.id, // Enforce current AY
+                school_id: school.id,
+                academic_year_id: academicYear.id,
                 section_id: selectedSectionId,
                 subject_id: data.subjectId,
                 teacher_id: data.teacherId === 'none' ? null : data.teacherId,
@@ -210,10 +211,11 @@ export default function AdminClasses() {
     const enrollStudentsMutation = useMutation({
         mutationFn: async (studentIds: string[]) => {
             if (!selectedSectionId) throw new Error("No section selected");
+            if (!school?.id || !academicYear?.id) throw new Error("School or academic year not selected");
             const { error } = await supabase.from('student_sections').insert(
                 studentIds.map(sid => ({
-                    school_id: school?.id,
-                    academic_year_id: academicYear?.id,
+                    school_id: school.id,
+                    academic_year_id: academicYear.id,
                     section_id: selectedSectionId,
                     student_id: sid
                 }))
@@ -250,8 +252,9 @@ export default function AdminClasses() {
     // Create Subject
     const createSubjectMutation = useMutation({
         mutationFn: async (data: typeof newSubject) => {
+            if (!school?.id) throw new Error("School not selected");
             const { error } = await supabase.from('subjects').insert({
-                school_id: school?.id,
+                school_id: school.id,
                 name: data.name,
                 code: data.code,
                 grade_level: data.gradeLevel
@@ -459,7 +462,7 @@ export default function AdminClasses() {
                         </>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                            <School className="w-16 h-16 mb-4 opacity-20" />
+                            <Building2 className="w-16 h-16 mb-4 opacity-20" />
                             <p>Select a section to view its details</p>
                         </div>
                     )}

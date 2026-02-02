@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Loader2, Plus, Pencil, Trash2, Mail, User } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, User } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -95,12 +95,10 @@ export default function AdminTeachers() {
             }
 
             // 3. Update Profile (Trigger might handle this, but explicit update ensures name/school)
-            const { error: profileError } = await supabase.from('profiles').update({
+            await supabase.from('profiles').update({
                 school_id: school?.id,
                 name: data.name
             }).eq('id', authData.user.id);
-
-            
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-teachers'] });
