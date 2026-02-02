@@ -13,6 +13,15 @@ import AdminBooks from "./pages/admin/Books";
 import AdminStudents from "./pages/admin/Students";
 import AdminUsers from "./pages/admin/Users";
 import AdminQuipper from "./pages/admin/Quipper";
+import AdminEnrollment from "./pages/admin/Enrollment";
+import AdminAttendance from "./pages/admin/Attendance";
+import AdminTeachers from "./pages/admin/Teachers";
+import AdminClasses from "./pages/admin/Classes";
+import AdminGrades from "./pages/admin/Grades";
+import AdminSchools from "./pages/admin/Schools";
+import AdminAcademicYears from "./pages/admin/AcademicYears";
+import AdminSettings from "./pages/admin/Settings";
+import AttendanceScanner from "./pages/AttendanceScanner";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import NotFound from "./pages/NotFound";
 
@@ -35,6 +44,15 @@ const App = () => (
             <Route path="/admin/students" element={<AdminStudents />} />
             <Route path="/admin/users" element={<AdminUsers />} />
             <Route path="/admin/quipper" element={<AdminQuipper />} />
+            <Route path="/admin/enrollment" element={<AdminEnrollment />} />
+            <Route path="/admin/attendance" element={<AdminAttendance />} />
+            <Route path="/admin/teachers" element={<AdminTeachers />} />
+            <Route path="/admin/classes" element={<AdminClasses />} />
+            <Route path="/admin/grades" element={<AdminGrades />} />
+            <Route path="/admin/attendance/scanner" element={<AttendanceScanner />} />
+            <Route path="/admin/schools" element={<AdminSchools />} />
+            <Route path="/admin/academic-years" element={<AdminAcademicYears />} />
+            <Route path="/admin/settings" element={<AdminSettings />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

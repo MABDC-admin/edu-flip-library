@@ -2,20 +2,15 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
-type AppRole = 'admin' | 'student' | 'teacher';
-
-interface Profile {
-  id: string;
-  name: string;
-  grade_level: number | null;
-  avatar_url: string | null;
-}
+import { AppRole, Profile, School, AcademicYear } from '@/types/database';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   profile: Profile | null;
-  role: AppRole | null;
+  roles: AppRole[];
+  school: School | null;
+  academicYear: AcademicYear | null;
   isAdmin: boolean;
   isTeacher: boolean;
   isLoading: boolean;
@@ -23,6 +18,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string, gradeLevel?: number) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  setSchool: (school: School | null) => void;
+  setAcademicYear: (year: AcademicYear | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,7 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
+  const [roles, setRoles] = useState<AppRole[]>([]);
+  const [school, setSchool] = useState<School | null>(null);
+  const [academicYear, setAcademicYear] = useState<AcademicYear | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchProfile = async (userId: string) => {
@@ -41,18 +40,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq('id', userId)
       .single();
 
+
+
     if (profileData) {
-      setProfile(profileData);
+      const pData = profileData as any;
+      setProfile(pData as Profile);
+
+      // Fetch school if associated
+      if (pData.school_id) {
+        const { data: schoolData } = await (supabase as any)
+          .from('schools')
+          .select('*')
+          .eq('id', pData.school_id)
+          .single();
+        if (schoolData) setSchool(schoolData as School);
+      } else {
+        // [New] Default to MABDC for admins if no school is set
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+
+        const userRoles = roleData?.map(r => r.role) || [];
+
+        if (userRoles.includes('admin')) {
+          const { data: mabdcSchool } = await (supabase as any)
+            .from('schools')
+            .select('*')
+            .eq('short_name', 'MABDC')
+            .single();
+
+          if (mabdcSchool) setSchool(mabdcSchool as School);
+        }
+      }
+
+      // Fetch academic year if associated
+      if (pData.academic_year_id) {
+        const { data: ayData } = await (supabase as any)
+          .from('academic_years')
+          .select('*')
+          .eq('id', pData.academic_year_id)
+          .single();
+        if (ayData) setAcademicYear(ayData as AcademicYear);
+      } else {
+        // [New] Default to 2026-2027 for admins if no academic year is set
+        // Re-check role if needed, or rely on logic that runs after
+        // Note: To avoid duplicate role fetching, we do a quick check here similar to above
+        const { data: roleData } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', userId);
+
+        const userRoles = roleData?.map(r => r.role) || [];
+
+        if (userRoles.includes('admin')) {
+          const { data: defaultAy } = await (supabase as any)
+            .from('academic_years')
+            .select('*')
+            .eq('label', '2026-2027')
+            .single();
+
+          if (defaultAy) setAcademicYear(defaultAy as AcademicYear);
+        }
+      }
     }
 
     const { data: roleData } = await supabase
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
-      .single();
+      .eq('user_id', userId);
 
     if (roleData) {
-      setRole(roleData.role as AppRole);
+      setRoles(roleData.map(r => r.role as AppRole));
+    } else {
+      setRoles([]);
     }
   };
 
@@ -70,7 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }, 0);
         } else {
           setProfile(null);
-          setRole(null);
+          setRoles([]);
         }
 
         setIsLoading(false);
@@ -103,16 +164,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // Fetch role to send in notification
-        const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id).single();
-        const userRole = roleData?.role || 'student';
+        const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
+        const userRoles = roleData?.map(r => r.role) || ['student'];
 
-        console.log(`[Auth] User logged in: ${email} (${userRole}). Notifying admin...`);
+        console.log(`[Auth] User logged in: ${email} (${userRoles.join(', ')}). Notifying admin...`);
 
         const { data, error: invokeError } = await supabase.functions.invoke('notify-admin', {
           body: {
             type: 'login',
             user_email: email,
-            user_role: userRole,
+            user_role: userRoles[0], // approximate for old API
           }
         });
 
@@ -160,7 +221,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setSession(null);
     setProfile(null);
-    setRole(null);
+    setRoles([]);
+    setSchool(null);
+    setAcademicYear(null);
   };
 
   const refreshProfile = async () => {
@@ -173,14 +236,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     session,
     profile,
-    role,
-    isAdmin: role === 'admin',
-    isTeacher: role === 'teacher',
+    roles,
+    school,
+    academicYear,
+    isAdmin: roles.includes('admin'),
+    isTeacher: roles.includes('teacher'),
     isLoading,
     signIn,
     signUp,
     signOut,
     refreshProfile,
+    setSchool,
+    setAcademicYear,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

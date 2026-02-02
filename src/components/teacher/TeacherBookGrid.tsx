@@ -38,8 +38,8 @@ export function TeacherBookGrid({
 
   const filteredBooks = searchQuery
     ? books.filter((book) =>
-        book.title.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      book.title.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : books;
 
   return (
@@ -58,13 +58,13 @@ export function TeacherBookGrid({
       )}
 
       {filteredBooks.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6 items-stretch">
           {filteredBooks.map((book, index) => (
             <Card
               key={book.id}
               onClick={() => onBookClick(book)}
               className={cn(
-                "group relative overflow-hidden cursor-pointer transition-all duration-300",
+                "group relative overflow-hidden cursor-pointer transition-all duration-300 h-full flex flex-col",
                 "hover:shadow-book hover:-translate-y-2 hover:scale-105",
                 "animate-fade-in-up opacity-0"
               )}
@@ -115,9 +115,8 @@ export function TeacherBookGrid({
                 </div>
               </div>
 
-              {/* Book info */}
-              <div className="p-3 space-y-1">
-                <h3 className="font-display font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
+              <div className="p-3 flex-grow flex flex-col">
+                <h3 className="font-display font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors min-h-[2.5rem] flex items-start">
                   {book.title}
                 </h3>
                 <p className="text-xs text-muted-foreground">

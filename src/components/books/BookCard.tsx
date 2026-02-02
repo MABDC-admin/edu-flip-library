@@ -29,16 +29,16 @@ export function BookCard({ book, className, style }: BookCardProps) {
   const gradeColor = gradeColorClasses[book.grade_level] || gradeColorClasses[1];
 
   return (
-    <Link to={`/read/${book.id}`} style={style}>
+    <Link to={`/read/${book.id}`} style={style} className="h-full block">
       <Card className={cn(
-        "group relative overflow-hidden cursor-pointer transition-all duration-300",
+        "group relative overflow-hidden cursor-pointer transition-all duration-300 h-full flex flex-col",
         "hover:shadow-book hover:-translate-y-2 hover:scale-105",
         "animate-fade-in-up",
         className
       )}>
         {/* Book Cover */}
         <div className={cn(
-          "aspect-[3/4] relative bg-gradient-to-br",
+          "aspect-[3/4] relative bg-gradient-to-br shrink-0",
           gradeColor
         )}>
           {book.cover_url ? (
@@ -54,8 +54,16 @@ export function BookCard({ book, className, style }: BookCardProps) {
           )}
 
           {/* Grade badge */}
-          <div className="absolute top-2 left-2 bg-white/90 text-foreground px-2 py-0.5 rounded text-xs font-semibold">
+          <div className="absolute top-2 left-2 bg-white/90 text-foreground px-2 py-0.5 rounded text-[10px] font-bold shadow-sm z-10">
             {GRADE_LABELS[book.grade_level]}
+          </div>
+
+          {/* Source badge */}
+          <div className={cn(
+            "absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold shadow-sm z-10 text-white",
+            book.source === 'quipper' ? "bg-purple-600" : "bg-primary"
+          )}>
+            {book.source === 'quipper' ? 'QUIPPER' : 'SCHOOL'}
           </div>
 
           {/* 3D book spine effect */}
@@ -69,13 +77,10 @@ export function BookCard({ book, className, style }: BookCardProps) {
           </div>
         </div>
 
-        {/* Book info */}
-        <div className="p-4 space-y-2">
-          <h3 className="font-display font-semibold text-lg line-clamp-2 group-hover:text-primary transition-colors">
+        <div className="p-3 flex-grow flex flex-col">
+          <h3 className="font-display font-semibold text-[15px] leading-tight line-clamp-2 group-hover:text-primary transition-colors h-[2.5rem] overflow-hidden flex items-start">
             {book.title}
           </h3>
-
-
         </div>
       </Card>
     </Link>

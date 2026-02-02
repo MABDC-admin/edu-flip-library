@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Folder } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import { AdminLayout } from '@/components/admin/AdminLayout';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, LayoutGrid, List, Check, X, Lock, Globe, RefreshCw } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, LayoutGrid, List, School, Library, FileText, Pencil, Eye, RefreshCw } from 'lucide-react';
+import { GradeSidebar } from '@/components/bookshelf/GradeSidebar';
 import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -28,6 +31,7 @@ const formSchema = z.object({
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
 
 export default function AdminBooks() {
+  const { profile, school } = useAuth();
   const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -40,52 +44,105 @@ export default function AdminBooks() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSubject, setActiveSubject] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkGrade, setBulkGrade] = useState<number>(1);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
-  const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
-  const [tempTitle, setTempTitle] = useState('');
+  // Unused state removed
   const [source, setSource] = useState<'internal' | 'quipper'>('internal');
   const [isTeacherOnly, setIsTeacherOnly] = useState(false);
   const [bulkSource, setBulkSource] = useState<'internal' | 'quipper'>('internal');
   const [bulkIsTeacherOnly, setBulkIsTeacherOnly] = useState(false);
-  const [filterSource, setFilterSource] = useState<string>('internal');
+  const [filterSource, setFilterSource] = useState<string>('all');
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteAnswer, setDeleteAnswer] = useState('');
+  const [bookIdToDelete, setBookIdToDelete] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   const { data: books, isLoading } = useQuery({
-    queryKey: ['admin-books'],
+    queryKey: ['admin-books', school?.id],
     queryFn: async () => {
+      if (!school?.id) return [];
       const { data, error } = await supabase
         .from('books')
         .select('*')
+        .or(`school_id.eq.${school.id},school_id.is.null`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return (data as any) as BookWithProgress[];
     },
+    enabled: !!school?.id,
   });
+
+  const normalizedActiveGrade = filterGrade === '12' ? 11 : (filterGrade === 'all' ? 'all' : parseInt(filterGrade));
 
   const filteredBooks = books?.filter(book => {
     const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesGrade = filterGrade === 'all' || book.grade_level === parseInt(filterGrade);
-    const matchesSource = book.source === filterSource;
-    return matchesSearch && matchesGrade && matchesSource;
+
+    // Normalize Grade 12 to 11 for filtering
+    const bookGrade = book.grade_level;
+    const matchesGrade = normalizedActiveGrade === 'all' ||
+      (normalizedActiveGrade === 11 ? (bookGrade === 11 || bookGrade === 12) : bookGrade === normalizedActiveGrade);
+
+    const matchesSource = filterSource === 'all'
+      ? true
+      : filterSource === 'internal'
+        ? (!book.source || book.source.toLowerCase() === 'internal')
+        : book.source?.toLowerCase() === filterSource.toLowerCase();
+
+    const matchesSubject = activeSubject === 'all' || book.subject === activeSubject;
+
+    return matchesSearch && matchesGrade && matchesSource && matchesSubject;
   });
 
-  // Group books by grade
-  const groupedBooks = filteredBooks?.reduce((acc, book) => {
-    const grade = book.grade_level;
-    if (!acc[grade]) acc[grade] = [];
-    acc[grade].push(book);
-    return acc;
-  }, {} as Record<number, Book[]>);
+  const schoolBooks = filteredBooks?.filter(b => b.school_id === school?.id) || [];
+  const globalBooks = filteredBooks?.filter(b => !b.school_id) || [];
 
-  // Sort grades ascending
-  const sortedGrades = groupedBooks ? Object.keys(groupedBooks).map(Number).sort((a, b) => a - b) : [];
+  const subjectsInActiveGrade = Array.from(new Set(filteredBooks?.map(b => b.subject || 'Uncategorized') || [])).sort();
+
+  // Grouping logic for Admin
+  const groupByProperty = (bookList: BookWithProgress[], prop: 'grade_level' | 'subject') => {
+    return bookList.reduce((acc, book) => {
+      const key = book[prop] || (prop === 'subject' ? 'Uncategorized' : 1);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(book);
+      return acc;
+    }, {} as Record<string | number, BookWithProgress[]>);
+  };
+
+  console.log('AdminBooks State:', {
+    totalBooks: books?.length,
+    filtered: filteredBooks?.length,
+    schoolBooks: schoolBooks.length,
+    globalBooks: globalBooks.length,
+    activeSchoolId: school?.id,
+    filterSource,
+    searchQuery
+  });
+
+  const activeGrouping = normalizedActiveGrade === 'all' ? 'grade_level' : 'subject';
+  const schoolBooksGrouped = groupByProperty(schoolBooks, activeGrouping);
+  const globalBooksGrouped = groupByProperty(globalBooks, activeGrouping);
+
+  const schoolGroups = Object.keys(schoolBooksGrouped)
+    .sort((a, b) => {
+      if (activeGrouping === 'grade_level') return Number(b) - Number(a);
+      return a.localeCompare(b);
+    });
+
+  const globalGroups = Object.keys(globalBooksGrouped)
+    .sort((a, b) => {
+      if (activeGrouping === 'grade_level') return Number(b) - Number(a);
+      return a.localeCompare(b);
+    });
+
+
 
   const updateBook = useMutation({
     mutationFn: async ({ id, title, gradeLevel, source, isTeacherOnly }: { id: string; title: string; gradeLevel: number; source?: string; isTeacherOnly?: boolean }) => {
@@ -135,6 +192,7 @@ export default function AdminBooks() {
         is_teacher_only: isTeacherOnly,
         status: 'processing',
         page_count: 0,
+        school_id: school?.id,
       })
       .select()
       .single();
@@ -203,10 +261,38 @@ export default function AdminBooks() {
       resetPdfProgress();
       toast({ title: 'Book uploaded! 📚' });
     },
-    onError: (error) => {
-      resetPdfProgress();
-      toast({ title: 'Upload failed', description: error.message, variant: 'destructive' });
+  });
+
+  const reprocessBook = useMutation({
+    mutationFn: async (book: BookWithProgress) => {
+      if (!book.pdf_url) throw new Error('No PDF URL found');
+
+      toast({ title: 'Downloading PDF for reprocessing...' });
+
+      const { data, error } = await supabase.storage
+        .from('pdf-uploads')
+        .download(book.pdf_url);
+
+      if (error) throw error;
+
+      const file = new File([data], 'reprocess.pdf', { type: 'application/pdf' });
+      await supabase.from('books').update({ status: 'processing' }).eq('id', book.id);
+
+      const { numPages, firstPageUrl } = await processInBrowser(book.id, file);
+
+      await supabase.from('books').update({
+        page_count: numPages,
+        status: 'ready',
+        cover_url: book.cover_url || firstPageUrl,
+      }).eq('id', book.id);
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+      toast({ title: 'Book reprocessed! 🔄' });
+    },
+    onError: (error: any) => {
+      toast({ title: 'Reprocess failed', description: error.message, variant: 'destructive' });
+    }
   });
 
   const handleBulkUpload = async () => {
@@ -217,11 +303,11 @@ export default function AdminBooks() {
     for (let i = 0; i < bulkFiles.length; i++) {
       const file = bulkFiles[i];
       const title = file.name.replace(/\.[^/.]+$/, ""); // Strip extension
-      setBulkProgress(p => ({ ...p, currentTitle: title }));
+      setBulkProgress((p: any) => ({ ...p, currentTitle: title }));
 
       try {
         await uploadSingleBook(title, bulkGrade, file, null, bulkSource, bulkIsTeacherOnly);
-        setBulkProgress(p => ({ ...p, done: i + 1 }));
+        setBulkProgress((p: any) => ({ ...p, done: i + 1 }));
       } catch (err) {
         toast({ title: `Failed: ${title}`, variant: 'destructive' });
       }
@@ -255,7 +341,6 @@ export default function AdminBooks() {
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
-      // 1. Delete record (cascade should handle files if configured, but let's be safe)
       const { error } = await supabase
         .from('books')
         .delete()
@@ -263,12 +348,14 @@ export default function AdminBooks() {
 
       if (error) throw error;
 
-      // 2. Cleanup storage (Optional but recommended)
       await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]).catch(console.error);
       await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-books'] });
+      setIsDeleteOpen(false);
+      setDeleteAnswer('');
+      setBookIdToDelete(null);
       toast({
         title: 'Book deleted',
         description: 'The book and its files have been removed.',
@@ -283,27 +370,19 @@ export default function AdminBooks() {
     },
   });
 
-  const reprocessBook = useMutation({
-    mutationFn: async (book: BookWithProgress) => {
-      if (!book.pdf_url) throw new Error("No PDF found for this book");
-
-      const { data, error } = await supabase.storage.from("pdf-uploads").download(book.pdf_url);
-      if (error) throw error;
-
-      const file = new File([data], "source.pdf", { type: "application/pdf" });
-      await processInBrowser(book.id, file);
-
-      // Ensure status is ready
-      await supabase.from('books').update({ status: 'ready' }).eq('id', book.id);
-    },
-    onSuccess: () => {
-      toast({ title: 'Book reprocessed successfully', description: 'Cover and pages have been regenerated.' });
-      queryClient.invalidateQueries({ queryKey: ['admin-books'] });
-    },
-    onError: (error) => {
-      toast({ title: 'Reprocess failed', description: error.message, variant: 'destructive' });
+  const confirmDelete = () => {
+    if (deleteAnswer.toLowerCase() === 'banana' && bookIdToDelete) {
+      deleteBook.mutate(bookIdToDelete);
+    } else {
+      toast({
+        title: 'Incorrect Answer',
+        description: 'Please answer the security question correctly to delete.',
+        variant: 'destructive'
+      });
     }
-  });
+  };
+
+  // Unused mutation removed
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -335,21 +414,10 @@ export default function AdminBooks() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'ready':
-        return <Badge className="bg-success/10 text-success border-success/20">Ready</Badge>;
-      case 'processing':
-        return <Badge className="bg-warning/10 text-warning border-warning/20">Processing</Badge>;
-      case 'error':
-        return <Badge className="bg-destructive/10 text-destructive border-destructive/20">Error</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
-    }
-  };
+  // getStatusBadge removed (duplicate)
 
   return (
-    <AdminLayout title="Books">
+    <AdminLayout title="">
       <div className="space-y-6">
         {/* Actions bar */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">
@@ -370,20 +438,23 @@ export default function AdminBooks() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Grades</SelectItem>
-                {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
+                {Object.entries(GRADE_LABELS)
+                  .filter(([value]) => value !== '12')
+                  .map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
 
             <Select value={filterSource} onValueChange={setFilterSource}>
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Source" />
+                <SelectValue placeholder="All Sources" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="internal">Internal</SelectItem>
+                <SelectItem value="all">All Sources</SelectItem>
+                <SelectItem value="internal">Internal Library</SelectItem>
                 <SelectItem value="quipper">Quipper</SelectItem>
               </SelectContent>
             </Select>
@@ -430,9 +501,11 @@ export default function AdminBooks() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.entries(GRADE_LABELS).map(([v, l]) => (
-                            <SelectItem key={v} value={v}>{l}</SelectItem>
-                          ))}
+                          {Object.entries(GRADE_LABELS)
+                            .filter(([v]) => v !== '12')
+                            .map(([v, l]) => (
+                              <SelectItem key={v} value={v}>{l}</SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -534,11 +607,13 @@ export default function AdminBooks() {
                             <SelectValue placeholder="Select" />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                              <SelectItem key={value} value={value}>
-                                {label}
-                              </SelectItem>
-                            ))}
+                            {Object.entries(GRADE_LABELS)
+                              .filter(([value]) => value !== '12')
+                              .map(([value, label]) => (
+                                <SelectItem key={value} value={value}>
+                                  {label}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -559,25 +634,6 @@ export default function AdminBooks() {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Grade Level</Label>
-                        <Select
-                          value={gradeLevel.toString()}
-                          onValueChange={(val) => setGradeLevel(parseInt(val))}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select Grade" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(GRADE_LABELS).map(([val, label]) => (
-                              <SelectItem key={val} value={val}>
-                                {label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="space-y-2">
                         <Label>Content Source</Label>
                         <Select
                           value={source}
@@ -596,17 +652,17 @@ export default function AdminBooks() {
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
 
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed">
-                      <div className="space-y-0.5">
-                        <Label className="text-sm font-medium">Teacher & Admin Only</Label>
-                        <p className="text-xs text-muted-foreground">Hide this book from student bookshelves</p>
+                      <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed h-[68px] mt-2">
+                        <div className="space-y-0.5">
+                          <Label className="text-sm font-medium">Teacher Only</Label>
+                          <p className="text-[10px] text-muted-foreground leading-tight">Hide from students</p>
+                        </div>
+                        <Switch
+                          checked={isTeacherOnly}
+                          onCheckedChange={setIsTeacherOnly}
+                        />
                       </div>
-                      <Switch
-                        checked={isTeacherOnly}
-                        onCheckedChange={setIsTeacherOnly}
-                      />
                     </div>
 
                     <div className="space-y-2">
@@ -681,339 +737,561 @@ export default function AdminBooks() {
               </Dialog>
             </div>
           </div>
-
-          <p className="text-sm text-muted-foreground mt-2">
-            {books?.length || 0} books in library
-          </p>
         </div>
 
-        {/* Books display */}
-        {isLoading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <Skeleton key={i} className="aspect-[3/4] rounded-xl" />
-            ))}
-          </div>
-        ) : viewMode === 'grid' ? (
-          <div className="space-y-12">
-            {sortedGrades.map((grade) => (
-              <div key={grade} className="space-y-6">
-                <div className="flex items-center gap-4">
-                  <h2 className="text-xl font-bold text-gradient whitespace-nowrap">
-                    {GRADE_LABELS[grade]}
-                  </h2>
-                  <div className="h-px w-full bg-slate-200" />
-                  <Badge variant="outline" className="whitespace-nowrap">
-                    {groupedBooks?.[grade].length} Books
-                  </Badge>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                  {groupedBooks?.[grade].map((book) => (
-                    <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1">
-                      <div className="aspect-[3/4] relative bg-slate-100">
-                        {book.cover_url ? (
-                          <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-slate-300">
-                            <BookOpen className="w-12 h-12" />
-                          </div>
-                        )}
-                        <div className="absolute top-2 left-2 flex gap-1">
-                          {getStatusBadge(book.status)}
-                        </div>
-                        <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
-                          {book.is_teacher_only ? (
-                            <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg" title="Teacher Only">
-                              <Lock className="w-3 h-3" />
-                            </div>
-                          ) : (
-                            <div className="bg-blue-500/90 text-white rounded-full p-1 shadow-lg" title="Visible to Students">
-                              <Globe className="w-3 h-3" />
-                            </div>
-                          )}
-                          {book.source === 'quipper' && (
-                            <div className="bg-purple-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded shadow-lg uppercase tracking-tight">
-                              Q
-                            </div>
-                          )}
-                        </div>
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                          <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
-                            <BookOpen className="w-4 h-4" />
-                          </Button>
-                          <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)} title="Reprocess (Fix Cover/Pages)">
-                            {reprocessBook.isPending && reprocessBook.variables?.id === book.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                          </Button>
-                          <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}>
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
-                          <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="p-3">
-                        {editingTitleId === book.id ? (
-                          <div className="flex items-center gap-1">
-                            <Input
-                              value={tempTitle}
-                              onChange={(e) => setTempTitle(e.target.value)}
-                              className="h-8 text-sm"
-                              autoFocus
-                            />
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-success"
-                              onClick={() => {
-                                updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
-                                setEditingTitleId(null);
-                              }}
-                            >
-                              <Check className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-8 w-8 text-destructive"
-                              onClick={() => setEditingTitleId(null)}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div
-                            className="flex items-center justify-between cursor-pointer group/title"
-                            onClick={() => {
-                              setEditingTitleId(book.id);
-                              setTempTitle(book.title);
-                            }}
-                          >
-                            <h3 className="font-semibold text-sm truncate pr-2">{book.title}</h3>
-                            <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
-                          </div>
-                        )}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+        <div className="flex gap-6 lg:gap-8 mt-6">
+          <GradeSidebar
+            activeGrade={normalizedActiveGrade}
+            onGradeChange={(grade) => setFilterGrade(grade.toString())}
+            profile={profile}
+            isAdmin={true}
+          />
+
+          <main className="flex-1 min-w-0">
+            {/* Subject Folders */}
+            <div className="flex flex-wrap gap-2.5 mb-8">
+              <button
+                onClick={() => setActiveSubject('all')}
+                className={cn(
+                  "px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border shadow-sm",
+                  activeSubject === 'all'
+                    ? "bg-slate-800 text-white border-slate-800 shadow-lg shadow-slate-200"
+                    : "bg-white text-slate-500 border-slate-100 hover:border-slate-300"
+                )}
+              >
+                All Folders
+              </button>
+              {subjectsInActiveGrade.map((subj) => (
+                <button
+                  key={subj}
+                  onClick={() => setActiveSubject(subj)}
+                  className={cn(
+                    "flex items-center gap-2.5 px-6 py-2.5 rounded-2xl text-xs font-bold transition-all border shadow-sm",
+                    activeSubject === subj
+                      ? "bg-primary text-white border-primary shadow-lg shadow-primary/10"
+                      : "bg-white text-slate-500 border-slate-100 hover:border-slate-300"
+                  )}
+                >
+                  <Folder className={cn("w-4 h-4", activeSubject === subj ? "fill-current" : "text-slate-200")} />
+                  {subj}
+                </button>
+              ))}
+            </div>
+
+            {/* Books display */}
+            {isLoading ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <Skeleton key={i} className="aspect-[3/4] rounded-xl" />
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-8">
-            {sortedGrades.map((grade) => (
-              <div key={grade} className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <h2 className="text-lg font-semibold">{GRADE_LABELS[grade]}</h2>
-                  <div className="h-px flex-1 bg-slate-100" />
-                </div>
-                <Card>
-                  <CardContent className="p-0">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Title</TableHead>
-                          <TableHead>Grade</TableHead>
-                          <TableHead>Source</TableHead>
-                          <TableHead>Visibility</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead className="w-[100px]">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {groupedBooks?.[grade].map((book) => (
-                          <TableRow key={book.id}>
-                            <TableCell className="font-medium">
-                              {editingTitleId === book.id ? (
-                                <div className="flex items-center gap-2">
-                                  <Input
-                                    value={tempTitle}
-                                    onChange={(e) => setTempTitle(e.target.value)}
-                                    className="h-8 w-48"
-                                    autoFocus
-                                  />
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => {
-                                      updateBook.mutate({ id: book.id, title: tempTitle, gradeLevel: book.grade_level });
-                                      setEditingTitleId(null);
-                                    }}
-                                  >
-                                    <Check className="w-4 h-4" />
-                                  </Button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-3 group/title cursor-pointer" onClick={() => { setEditingTitleId(book.id); setTempTitle(book.title); }}>
-                                  <div className="w-8 h-8 rounded bg-primary/10 flex items-center justify-center">
-                                    <BookOpen className="w-4 h-4 text-primary" />
-                                  </div>
-                                  {book.title}
-                                  <Edit2 className="w-3 h-3 opacity-0 group-hover/title:opacity-50" />
-                                </div>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="outline">{GRADE_LABELS[book.grade_level]}</Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant="secondary" className={cn(book.source === 'quipper' && "bg-purple-100 text-purple-700")}>
-                                {book.source === 'quipper' ? 'Quipper' : 'Internal'}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {book.is_teacher_only ? (
-                                <Badge className="bg-amber-100 text-amber-700 border-amber-200">
-                                  <Lock className="w-3 h-3 mr-1" /> Teacher Only
-                                </Badge>
-                              ) : (
-                                <Badge className="bg-blue-100 text-blue-700 border-blue-200">
-                                  <Globe className="w-3 h-3 mr-1" /> Students
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell>{getStatusBadge(book.status)}</TableCell>
-                            <TableCell className="text-muted-foreground text-xs">
-                              {new Date(book.created_at).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => navigate(`/read/${book.id}`)}
-                                >
-                                  <BookOpen className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => openEditDialog(book)}
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => deleteBook.mutate(book.id)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
+            ) : (
+              <div className="space-y-8">
+                {schoolGroups.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <School className="w-5 h-5 text-primary" />
+                      School Library
+                    </h3>
+                    {viewMode === 'table' ? (
+                      <div className="space-y-4">
+                        {schoolGroups.map((group) => (
+                          <div key={`school-group-${group}`} className="space-y-2">
+                            <h3 className="font-semibold text-lg text-muted-foreground ml-1">
+                              {activeGrouping === 'grade_level'
+                                ? (GRADE_LABELS[group as unknown as keyof typeof GRADE_LABELS] || `Grade ${group}`)
+                                : group
+                              }
+                            </h3>
+                            <div className="bg-white rounded-md border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-[80px]">Cover</TableHead>
+                                    <TableHead>Title</TableHead>
+                                    <TableHead>Subject</TableHead>
+                                    <TableHead className="text-center">Pages</TableHead>
+                                    <TableHead className="text-center">Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {schoolBooksGrouped[group]?.map((book: BookWithProgress) => (
+                                    <TableRow key={book.id}>
+                                      <TableCell>
+                                        <div className="w-12 h-16 bg-slate-100 rounded overflow-hidden">
+                                          {book.cover_url ? (
+                                            <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover" />
+                                          ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                              <BookOpen className="h-6 w-6 text-slate-300" />
+                                            </div>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="font-medium">
+                                        {book.title}
+                                        {book.is_teacher_only && (
+                                          <Badge variant="secondary" className="ml-2 text-xs">
+                                            Teacher Only
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className="bg-slate-50">
+                                          {book.source || 'General'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center text-muted-foreground">{book.page_count || '—'}</TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge className={
+                                          book.status === 'ready' ? 'bg-emerald-500 hover:bg-emerald-600' :
+                                            book.status === 'processing' ? 'bg-blue-500 hover:bg-blue-600' :
+                                              'bg-amber-500 hover:bg-amber-600'
+                                        }>
+                                          {book.status === 'ready' ? 'Active' : book.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                          <Button variant="ghost" size="icon" onClick={() => navigate(`/reader/${book.id}`)} title="View Book">
+                                            <Eye className="h-4 w-4 text-blue-500" />
+                                          </Button>
+                                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(book)} title="Edit Details">
+                                            <Pencil className="h-4 w-4 text-slate-600" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => reprocessBook.mutate(book)}
+                                            disabled={reprocessBook.isPending}
+                                            title="Reprocess Thumbnails"
+                                          >
+                                            <RefreshCw className={cn("h-4 w-4 text-emerald-600", reprocessBook.isPending && "animate-spin")} />
+                                          </Button>
+                                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => setBookIdToDelete(book.id)} title="Delete Book">
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
                         ))}
-                      </TableBody>
-                    </Table>
-                  </CardContent>
-                </Card>
-              </div>
-            ))}
-            {(!books || books.length === 0) && (
-              <div className="p-12 text-center bg-white rounded-xl border border-dashed">
-                <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-20" />
-                <h3 className="text-lg font-semibold mb-2">No books found</h3>
-                <p className="text-muted-foreground mb-6">Add your first book to get started!</p>
-                <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add New Book
-                </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-8">
+                        {schoolGroups.map((group) => (
+                          <div key={`school-group-grid-${group}`} className="space-y-4">
+                            <h3 className="font-semibold text-lg text-muted-foreground border-b pb-2">
+                              {activeGrouping === 'grade_level'
+                                ? (GRADE_LABELS[group as unknown as keyof typeof GRADE_LABELS] || `Grade ${group}`)
+                                : group
+                              }
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                              {schoolBooksGrouped[group]?.map((book: BookWithProgress) => (
+                                <Card key={book.id} className="group hover:shadow-lg transition-all duration-200 border-slate-200">
+                                  <div className="aspect-[3/4] relative overflow-hidden bg-slate-100 rounded-t-lg">
+                                    {book.cover_url ? (
+                                      <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center flex-col gap-2 text-slate-400">
+                                        <BookOpen className="h-12 w-12" />
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                    {book.is_teacher_only && (
+                                      <div className="absolute top-2 right-2">
+                                        <Badge variant="secondary" className="shadow-sm">Teacher Only</Badge>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="p-3 space-y-2">
+                                    <h4 className="font-semibold text-sm line-clamp-2 min-h-[2.5em] leading-snug" title={book.title}>
+                                      {book.title}
+                                    </h4>
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                      <span className="flex items-center gap-1">
+                                        <FileText className="h-3 w-3" />
+                                        {book.page_count || 0} pgs
+                                      </span>
+                                      <Badge variant="outline" className="text-[10px] h-5 px-1.5">
+                                        {book.source || 'General'}
+                                      </Badge>
+                                    </div>
+                                    <div className="pt-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button size="sm" variant="secondary" className="flex-1 h-8 text-xs gap-1.5" onClick={() => navigate(`/reader/${book.id}`)}>
+                                        <Eye className="w-3 h-3" /> View
+                                      </Button>
+                                      <Button size="sm" variant="secondary" className="h-8 w-8 p-0" onClick={() => openEditDialog(book)} title="Edit">
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        className="h-8 w-8 p-0"
+                                        onClick={() => reprocessBook.mutate(book)}
+                                        disabled={reprocessBook.isPending}
+                                        title="Reprocess"
+                                      >
+                                        <RefreshCw className={cn("h-3.5 w-3.5", reprocessBook.isPending && "animate-spin")} />
+                                      </Button>
+                                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => setBookIdToDelete(book.id)} title="Delete">
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </Card>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {globalGroups.length > 0 && (
+                  <div className="space-y-4 mt-8 pt-8 border-t">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <Library className="w-5 h-5 text-purple-500" />
+                      Shared / Global Library
+                    </h3>
+                    {viewMode === 'table' ? (
+                      <div className="space-y-4">
+                        {globalGroups.map((group) => (
+                          <div key={`global-group-${group}`} className="space-y-2">
+                            <h3 className="font-semibold text-lg text-muted-foreground ml-1">
+                              {activeGrouping === 'grade_level'
+                                ? (GRADE_LABELS[group as unknown as keyof typeof GRADE_LABELS] || `Grade ${group}`)
+                                : group
+                              }
+                            </h3>
+                            <div className="bg-white rounded-md border">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow>
+                                    <TableHead className="w-[80px]">Cover</TableHead>
+                                    <TableHead>Title</TableHead>
+                                    <TableHead>Subject</TableHead>
+                                    <TableHead className="text-center">Pages</TableHead>
+                                    <TableHead className="text-center">Status</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {globalBooksGrouped[group]?.map((book: BookWithProgress) => (
+                                    <TableRow key={book.id}>
+                                      <TableCell>
+                                        <div className="w-12 h-16 bg-slate-100 rounded overflow-hidden">
+                                          {book.cover_url ? (
+                                            <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover" />
+                                          ) : (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                              <BookOpen className="h-6 w-6 text-slate-300" />
+                                            </div>
+                                          )}
+                                        </div>
+                                      </TableCell>
+                                      <TableCell className="font-medium">
+                                        {book.title}
+                                        {book.is_teacher_only && (
+                                          <Badge variant="secondary" className="ml-2 text-xs">
+                                            Teacher Only
+                                          </Badge>
+                                        )}
+                                      </TableCell>
+                                      <TableCell>
+                                        <Badge variant="outline" className="bg-slate-50">
+                                          {book.source || 'General'}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-center text-muted-foreground">{book.page_count || '—'}</TableCell>
+                                      <TableCell className="text-center">
+                                        <Badge className={
+                                          book.status === 'ready' ? 'bg-emerald-500 hover:bg-emerald-600' :
+                                            book.status === 'processing' ? 'bg-blue-500 hover:bg-blue-600' :
+                                              'bg-amber-500 hover:bg-amber-600'
+                                        }>
+                                          {book.status === 'ready' ? 'Active' : book.status}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <div className="flex justify-end gap-1">
+                                          <Button variant="ghost" size="icon" onClick={() => navigate(`/reader/${book.id}`)} title="View Book">
+                                            <Eye className="h-4 w-4 text-blue-500" />
+                                          </Button>
+                                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(book)} title="Edit Details">
+                                            <Pencil className="h-4 w-4 text-slate-600" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => reprocessBook.mutate(book)}
+                                            disabled={reprocessBook.isPending}
+                                            title="Reprocess Thumbnails"
+                                          >
+                                            <RefreshCw className={cn("h-4 w-4 text-emerald-600", reprocessBook.isPending && "animate-spin")} />
+                                          </Button>
+                                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => setBookIdToDelete(book.id)} title="Delete Book">
+                                            <Trash2 className="h-4 w-4" />
+                                          </Button>
+                                        </div>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-8">
+                        {globalGroups.map((group) => (
+                          <div key={`global-group-grid-${group}`} className="space-y-4">
+                            <h3 className="font-semibold text-lg text-muted-foreground border-b pb-2">
+                              {activeGrouping === 'grade_level'
+                                ? (GRADE_LABELS[group as unknown as keyof typeof GRADE_LABELS] || `Grade ${group}`)
+                                : group
+                              }
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                              {globalBooksGrouped[group]?.map((book: BookWithProgress) => (
+                                <Card key={book.id} className="group hover:shadow-lg transition-all duration-200 border-slate-200 bg-purple-50/20">
+                                  <div className="aspect-[3/4] relative overflow-hidden bg-slate-100 rounded-t-lg">
+                                    {book.cover_url ? (
+                                      <img src={book.cover_url} alt={book.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center flex-col gap-2 text-slate-400">
+                                        <BookOpen className="h-12 w-12" />
+                                      </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
+                                    {book.is_teacher_only && (
+                                      <div className="absolute top-2 right-2">
+                                        <Badge variant="secondary" className="shadow-sm">Teacher Only</Badge>
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="p-3 space-y-2">
+                                    <h4 className="font-semibold text-sm line-clamp-2 min-h-[2.5em] leading-snug" title={book.title}>
+                                      {book.title}
+                                    </h4>
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                      <span className="flex items-center gap-1">
+                                        <FileText className="h-3 w-3" />
+                                        {book.page_count || 0} pgs
+                                      </span>
+                                      <Badge variant="outline" className="text-[10px] h-5 px-1.5">
+                                        Global
+                                      </Badge>
+                                    </div>
+                                    <div className="pt-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Button size="sm" variant="secondary" className="flex-1 h-8 text-xs gap-1.5" onClick={() => navigate(`/reader/${book.id}`)}>
+                                        <Eye className="w-3 h-3" /> View
+                                      </Button>
+                                      <Button size="sm" variant="secondary" className="h-8 w-8 p-0" onClick={() => openEditDialog(book)} title="Edit">
+                                        <Pencil className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        className="h-8 w-8 p-0"
+                                        onClick={() => reprocessBook.mutate(book)}
+                                        disabled={reprocessBook.isPending}
+                                        title="Reprocess"
+                                      >
+                                        <RefreshCw className={cn("h-3.5 w-3.5", reprocessBook.isPending && "animate-spin")} />
+                                      </Button>
+                                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => setBookIdToDelete(book.id)} title="Delete">
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </Card>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {(!books || books.length === 0) ? (
+                  <div className="p-12 text-center bg-white rounded-xl border border-dashed">
+                    <BookOpen className="w-12 h-12 mx-auto text-muted-foreground mb-4 opacity-20" />
+                    <h3 className="text-lg font-semibold mb-2">No books found</h3>
+                    <p className="text-muted-foreground mb-6">Add your first book to get started!</p>
+                    <Button onClick={() => setIsDialogOpen(true)} className="gradient-primary">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add New Book
+                    </Button>
+                  </div>
+                ) : filteredBooks?.length === 0 ? (
+                  <div className="p-12 text-center bg-white rounded-xl border border-dashed">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <BookOpen className="w-8 h-8 text-slate-300" />
+                    </div>
+                    <h3 className="text-lg font-semibold mb-2">No matches found</h3>
+                    <p className="text-muted-foreground mb-6">Try adjusting your search or filters to see more books.</p>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSearchQuery('');
+                        setFilterGrade('all');
+                        setFilterSource('all');
+                        setActiveSubject('all');
+                      }}
+                    >
+                      Clear All Filters
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             )}
-          </div>
-        )}
 
-        {/* Edit Dialog */}
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle>Edit Book Details</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-title">Book Title</Label>
-                <Input
-                  id="edit-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-grade">Grade Level</Label>
-                <Select
-                  value={gradeLevel.toString()}
-                  onValueChange={(value) => setGradeLevel(parseInt(value))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(GRADE_LABELS).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Content Source</Label>
-                  <Select
-                    value={source}
-                    onValueChange={(val: 'internal' | 'quipper') => {
-                      setSource(val);
-                      if (val === 'quipper') setIsTeacherOnly(true);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Source" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="internal">Internal Library</SelectItem>
-                      <SelectItem value="quipper">Quipper Content</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed col-span-2">
-                  <div className="space-y-0.5">
-                    <Label className="text-sm font-medium">Teacher & Admin Only</Label>
-                    <p className="text-xs text-muted-foreground">Hide this book from student bookshelves</p>
+            {/* Edit Dialog */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle>Edit Book Details</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-title">Book Title</Label>
+                    <Input
+                      id="edit-title"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                    />
                   </div>
-                  <Switch
-                    checked={isTeacherOnly}
-                    onCheckedChange={setIsTeacherOnly}
-                  />
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-grade">Grade Level</Label>
+                    <Select
+                      value={gradeLevel.toString()}
+                      onValueChange={(value) => setGradeLevel(parseInt(value))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(GRADE_LABELS).map(([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  className="gradient-primary"
-                  onClick={() => editingBook && updateBook.mutate({
-                    id: editingBook.id,
-                    title,
-                    gradeLevel,
-                    source,
-                    isTeacherOnly
-                  })}
-                  disabled={updateBook.isPending}
-                >
-                  {updateBook.isPending ? 'Saving...' : 'Save Changes'}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </AdminLayout>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Content Source</Label>
+                      <Select
+                        value={source}
+                        onValueChange={(val: 'internal' | 'quipper') => {
+                          setSource(val);
+                          if (val === 'quipper') setIsTeacherOnly(true);
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="internal">Internal Library</SelectItem>
+                          <SelectItem value="quipper">Quipper Content</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-dashed col-span-2">
+                      <div className="space-y-0.5">
+                        <Label className="text-sm font-medium">Teacher & Admin Only</Label>
+                        <p className="text-xs text-muted-foreground">Hide this book from student bookshelves</p>
+                      </div>
+                      <Switch
+                        checked={isTeacherOnly}
+                        onCheckedChange={setIsTeacherOnly}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      className="gradient-primary"
+                      onClick={() => editingBook && updateBook.mutate({
+                        id: editingBook.id,
+                        title,
+                        gradeLevel,
+                        source,
+                        isTeacherOnly
+                      })}
+                      disabled={updateBook.isPending}
+                    >
+                      {updateBook.isPending ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Delete Security Dialog */}
+            <Dialog open={isDeleteOpen} onOpenChange={(open) => {
+              setIsDeleteOpen(open);
+              if (!open) {
+                setDeleteAnswer('');
+                setBookIdToDelete(null);
+              }
+            }}>
+              <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                  <DialogTitle className="text-destructive flex items-center gap-2">
+                    <Trash2 className="w-5 h-5" />
+                    Confirm Deletion
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive font-medium">
+                    Warning: This action is permanent and cannot be undone.
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="security-question">Security Question: What is your favorite food?</Label>
+                    <Input
+                      id="security-question"
+                      placeholder="Type your answer..."
+                      value={deleteAnswer}
+                      onChange={(e) => setDeleteAnswer(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && confirmDelete()}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={confirmDelete}
+                      disabled={deleteBook.isPending}
+                    >
+                      {deleteBook.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Confirm Delete'}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </main >
+        </div >
+      </div >
+    </AdminLayout >
   );
 }

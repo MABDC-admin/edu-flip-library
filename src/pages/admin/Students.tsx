@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ const studentSchema = z.object({
 });
 
 export default function AdminStudents() {
+  const { academicYear, school } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -38,16 +40,19 @@ export default function AdminStudents() {
   const { toast } = useToast();
 
   const { data: students, isLoading } = useQuery({
-    queryKey: ['admin-students'],
+    queryKey: ['admin-students', school?.id],
     queryFn: async () => {
+      if (!school?.id) return [];
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
+        .eq('school_id', school.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as Profile[];
     },
+    enabled: !!school?.id
   });
 
   const createStudent = useMutation({
@@ -70,6 +75,8 @@ export default function AdminStudents() {
           data: {
             name,
             grade_level: gradeLevel,
+            school_id: school?.id,
+            academic_year_id: academicYear?.id,
           },
         },
       });
@@ -78,7 +85,7 @@ export default function AdminStudents() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-students'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-students', school?.id] });
       setIsDialogOpen(false);
       setEmail('');
       setPassword('');
@@ -110,7 +117,7 @@ export default function AdminStudents() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-students'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-students', school?.id] });
       toast({
         title: 'Student removed',
         description: 'The student has been removed from the system.',
@@ -237,7 +244,7 @@ export default function AdminStudents() {
   };
 
   return (
-    <AdminLayout title="Students">
+    <AdminLayout title="">
       <div className="space-y-6">
         {/* Actions bar */}
         <div className="flex flex-col sm:flex-row justify-between gap-4">

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card } from '@/components/ui/card';
@@ -8,13 +8,15 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, Lock, RefreshCw } from 'lucide-react';
+import { Upload, Plus, Trash2, BookOpen, Loader2, Edit2, Lock, RefreshCw, ChevronRight, Folder } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { usePdfToImages } from '@/hooks/usePdfToImages';
+import { useAuth } from '@/contexts/AuthContext';
 import { GRADE_LABELS, SUBJECT_LABELS, Book, BookWithProgress } from '@/types/database';
+import { cn } from '@/lib/utils';
 import { z } from 'zod';
 
 
@@ -25,29 +27,29 @@ const formSchema = z.object({
 });
 
 export default function AdminQuipper() {
+    const { school } = useAuth();
     const navigate = useNavigate();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [, setIsEditOpen] = useState(false);
-    const [, setEditingBook] = useState<Book | null>(null);
+    const [isEditOpen, setIsEditOpen] = useState(false);
+    const [editingBook, setEditingBook] = useState<Book | null>(null);
     const [title, setTitle] = useState('');
     const [gradeLevel, setGradeLevel] = useState<number>(1);
-    const [filterGrade, setFilterGrade] = useState<string>('all');
-    const [pdfFile, setPdfFile] = useState<File | null>(null);
-    const [coverFile, setCoverFile] = useState<File | null>(null);
-    const [, setErrors] = useState<Record<string, string>>({});
-    const [isUploading, setIsUploading] = useState(false);
+    const [activeGrade, setActiveGrade] = useState<number>(1);
+    const [activeSubject, setActiveSubject] = useState<string>('all');
     const [searchQuery, setSearchQuery] = useState('');
-    const [] = useState<'table' | 'grid'>('grid');
+    const [isUploading, setIsUploading] = useState(false);
     const [isBulkOpen, setIsBulkOpen] = useState(false);
     const [bulkFiles, setBulkFiles] = useState<File[]>([]);
     const [bulkGrade, setBulkGrade] = useState<number>(1);
     const [bulkSubject, setBulkSubject] = useState<string>('Science');
     const [bulkCustomSubject, setBulkCustomSubject] = useState('');
-    const [, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
-    const [] = useState<string | null>(null);
-    const [] = useState('');
+    const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, currentTitle: '' });
     const [subject, setSubject] = useState<string>('Science');
     const [customSubject, setCustomSubject] = useState('');
+    const [pdfFile, setPdfFile] = useState<File | null>(null);
+    const [coverFile, setCoverFile] = useState<File | null>(null);
+    const [errors, setErrors] = useState<Record<string, string>>({});
+
     // Quipper always default to teacher only and source quipper
     const [isTeacherOnly, setIsTeacherOnly] = useState(true);
 
@@ -55,47 +57,57 @@ export default function AdminQuipper() {
     const { toast } = useToast();
 
     const { data: books } = useQuery({
-        queryKey: ['admin-quipper-books'],
+        queryKey: ['admin-quipper-books', school?.id],
         queryFn: async () => {
+            if (!school?.id) return [];
             const { data, error } = await supabase
                 .from('books')
                 .select('*')
-                .eq('source', 'quipper') // Filter only Quipper
+                .eq('source', 'quipper')
+                .or(`school_id.eq.${school.id},school_id.is.null`)
                 .order('title', { ascending: true });
 
             if (error) throw error;
             return (data as any) as BookWithProgress[];
         },
+        enabled: !!school?.id
     });
 
     const filteredBooks = books?.filter(book => {
         const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesGrade = filterGrade === 'all' || book.grade_level === parseInt(filterGrade);
+        const matchesGrade = book.grade_level === activeGrade;
         return matchesSearch && matchesGrade;
     });
 
-    // Group books by grade and then by subject
-    const groupedBooks = filteredBooks?.reduce((acc, book) => {
-        const grade = book.grade_level;
-        const subject = book.subject || 'Uncategorized';
+    // Get unique subjects for the active grade
+    const subjectsInActiveGrade = useMemo(() => {
+        if (!filteredBooks) return [];
+        const subjects = new Set<string>();
+        filteredBooks.forEach(b => subjects.add(b.subject || 'Uncategorized'));
+        return Array.from(subjects).sort();
+    }, [filteredBooks]);
 
-        if (!acc[grade]) acc[grade] = {};
-        if (!acc[grade][subject]) acc[grade][subject] = [];
+    // Apply subject filter if not 'all'
+    const finalDisplayBooks = useMemo(() => {
+        if (!filteredBooks) return [];
+        if (activeSubject === 'all') return filteredBooks;
+        return filteredBooks.filter(b => (b.subject || 'Uncategorized') === activeSubject);
+    }, [filteredBooks, activeSubject]);
 
-        acc[grade][subject].push(book);
-        return acc;
-    }, {} as Record<number, Record<string, Book[]>>);
+    // Group books by grade and then by subject (Still useful for deep data operations)
 
-    const sortedGrades = groupedBooks ? Object.keys(groupedBooks).map(Number).sort((a, b) => a - b) : [];
 
-    useMutation({
-        mutationFn: async ({ id, title, gradeLevel, isTeacherOnly }: { id: string; title: string; gradeLevel: number; isTeacherOnly?: boolean }) => {
+
+
+    const updateBook = useMutation({
+        mutationFn: async ({ id, title, gradeLevel, subject, isTeacherOnly }: { id: string; title: string; gradeLevel: number; subject?: string; isTeacherOnly?: boolean }) => {
             const { data, error } = await supabase
                 .from('books')
                 .update({
                     title,
                     grade_level: gradeLevel,
-                    ...(isTeacherOnly !== undefined && { is_teacher_only: isTeacherOnly })
+                    subject,
+                    is_teacher_only: isTeacherOnly
                 })
                 .eq('id', id)
                 .select()
@@ -134,6 +146,7 @@ export default function AdminQuipper() {
                 is_teacher_only: isTeacherOnly,
                 status: 'processing',
                 page_count: 0,
+                school_id: school?.id,
             })
             .select()
             .single();
@@ -175,7 +188,7 @@ export default function AdminQuipper() {
             }
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['admin-quipper-books'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-quipper-books', school?.id] });
             setIsDialogOpen(false);
             resetForm();
             resetPdfProgress();
@@ -212,7 +225,7 @@ export default function AdminQuipper() {
         setIsUploading(false);
         setIsBulkOpen(false);
         setBulkFiles([]);
-        queryClient.invalidateQueries({ queryKey: ['admin-quipper-books'] });
+        queryClient.invalidateQueries({ queryKey: ['admin-quipper-books', school?.id] });
         toast({ title: 'Bulk upload complete! 🚀' });
     };
 
@@ -224,7 +237,7 @@ export default function AdminQuipper() {
             await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['admin-quipper-books'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-quipper-books', school?.id] });
             toast({ title: 'Quipper module deleted' });
         },
         onError: (error) => {
@@ -247,7 +260,7 @@ export default function AdminQuipper() {
         },
         onSuccess: () => {
             toast({ title: 'Book reprocessed successfully', description: 'Cover and pages have been regenerated.' });
-            queryClient.invalidateQueries({ queryKey: ['admin-quipper-books'] });
+            queryClient.invalidateQueries({ queryKey: ['admin-quipper-books', school?.id] });
         },
         onError: (error) => {
             toast({ title: 'Reprocess failed', description: error.message, variant: 'destructive' });
@@ -309,21 +322,14 @@ export default function AdminQuipper() {
     };
 
     return (
-        <AdminLayout title="Quipper Modules">
+        <AdminLayout title="">
             <div className="space-y-6">
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
                     <div className="flex flex-1 gap-2 max-w-xl">
                         <div className="relative flex-1">
-                            <Input placeholder="Search modules..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+                            <Input placeholder="Search modules in this grade..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
                             <BookOpen className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         </div>
-                        <Select value={filterGrade} onValueChange={setFilterGrade}>
-                            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All Grades" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Grades</SelectItem>
-                                {Object.entries(GRADE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
 
                         <div className="flex gap-2">
                             <Dialog open={isBulkOpen} onOpenChange={setIsBulkOpen}>
@@ -338,6 +344,20 @@ export default function AdminQuipper() {
                                         <DialogTitle>Bulk Upload Quipper Modules</DialogTitle>
                                     </DialogHeader>
                                     <div className="space-y-4 pt-4">
+                                        {isUploading && (
+                                            <div className="space-y-2 mb-4">
+                                                <div className="flex justify-between text-xs font-bold">
+                                                    <span className="text-primary animate-pulse">Processing: {bulkProgress.currentTitle}</span>
+                                                    <span>{bulkProgress.done} / {bulkProgress.total}</span>
+                                                </div>
+                                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-primary transition-all duration-300"
+                                                        style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                         <div className="space-y-2">
                                             <Label>Grade Level</Label>
                                             <Select value={bulkGrade.toString()} onValueChange={(val) => setBulkGrade(parseInt(val))}>
@@ -427,6 +447,7 @@ export default function AdminQuipper() {
                                         <div className="space-y-2">
                                             <Label>PDF File</Label>
                                             <Input type="file" accept=".pdf" onChange={(e) => setPdfFile(e.target.files?.[0] || null)} />
+                                            {errors.pdf && <p className="text-[10px] text-red-500 font-bold">{errors.pdf}</p>}
                                         </div>
                                         <div className="flex justify-end gap-2 pt-4">
                                             <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
@@ -441,78 +462,199 @@ export default function AdminQuipper() {
                     </div >
                 </div >
 
-                <div className="space-y-12">
-                    {sortedGrades.map((grade) => (
-                        <div key={grade} className="space-y-8">
-                            <div className="flex items-center gap-4">
-                                <h2 className="text-2xl font-bold text-gradient whitespace-nowrap">{GRADE_LABELS[grade]}</h2>
-                                <div className="h-px w-full bg-slate-200" />
-                            </div>
-
-                            <div className="space-y-10 pl-4 border-l-2 border-slate-100/50">
-                                {Object.entries(groupedBooks?.[grade] || {})
-                                    .sort(([a], [b]) => a.localeCompare(b))
-                                    .map(([subj, subjBooks]) => (
-                                        <div key={subj} className="space-y-6">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                                                    <BookOpen className="w-4 h-4 text-primary" />
-                                                </div>
-                                                <h3 className="text-lg font-semibold text-slate-800">{subj}</h3>
-                                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none">
-                                                    {subjBooks.length} Modules
-                                                </Badge>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                                                {subjBooks.map((book) => (
-                                                    <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1 border-slate-100">
-                                                        <div className="aspect-[3/4] relative bg-slate-100">
-                                                            {book.cover_url ? (
-                                                                <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
-                                                            ) : (
-                                                                <div className="absolute inset-0 flex items-center justify-center text-slate-300">
-                                                                    <BookOpen className="w-12 h-12" />
-                                                                </div>
-                                                            )}
-                                                            <div className="absolute top-2 left-2 flex gap-1">
-                                                                {getStatusBadge(book.status)}
-                                                            </div>
-                                                            <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
-                                                                {book.is_teacher_only && (
-                                                                    <div className="bg-amber-500/90 text-white rounded-full p-1 shadow-lg">
-                                                                        <Lock className="w-3 h-3" />
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                                                <Button size="icon" variant="secondary" onClick={() => navigate(`/read/${book.id}`)}>
-                                                                    <BookOpen className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button size="icon" variant="secondary" onClick={() => reprocessBook.mutate(book)}>
-                                                                    <RefreshCw className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button size="icon" variant="secondary" onClick={() => openEditDialog(book)}>
-                                                                    <Edit2 className="w-4 h-4" />
-                                                                </Button>
-                                                                <Button size="icon" variant="destructive" onClick={() => deleteBook.mutate(book.id)}>
-                                                                    <Trash2 className="w-4 h-4" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                        <div className="p-3">
-                                                            <h3 className="font-semibold text-sm truncate" title={book.title}>{book.title}</h3>
-                                                        </div>
-                                                    </Card>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-                            </div>
+                <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr] gap-8">
+                    {/* Level 1: Grade Sidebar */}
+                    <div className="space-y-4">
+                        <div className="px-3 py-2">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 px-3">Grade Levels</h3>
+                            <nav className="space-y-1">
+                                {Object.entries(GRADE_LABELS).map(([grade, label]) => {
+                                    const gradeNum = parseInt(grade);
+                                    const isActive = activeGrade === gradeNum;
+                                    return (
+                                        <button
+                                            key={grade}
+                                            onClick={() => {
+                                                setActiveGrade(gradeNum);
+                                                setActiveSubject('all');
+                                            }}
+                                            className={cn(
+                                                "w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-medium transition-all group",
+                                                isActive
+                                                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02]"
+                                                    : "hover:bg-slate-100 text-slate-600"
+                                            )}
+                                        >
+                                            <span className="flex items-center gap-3">
+                                                <div className={cn(
+                                                    "w-1.5 h-1.5 rounded-full",
+                                                    isActive ? "bg-white" : "bg-slate-300 group-hover:bg-primary/50"
+                                                )} />
+                                                {label}
+                                            </span>
+                                            {isActive && <ChevronRight className="w-4 h-4 opacity-50" />}
+                                        </button>
+                                    );
+                                })}
+                            </nav>
                         </div>
-                    ))}
+                    </div>
+
+                    {/* Level 2 & 3: Subjects and Content */}
+                    <div className="space-y-8 bg-slate-50/50 rounded-3xl p-6 lg:p-8 border border-white min-h-[600px]">
+                        <div className="space-y-6">
+                            {/* Subject Folders (Tabs Style) */}
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setActiveSubject('all')}
+                                    className={cn(
+                                        "px-4 py-2 rounded-full text-xs font-bold transition-all border",
+                                        activeSubject === 'all'
+                                            ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                                            : "bg-white text-slate-500 border-slate-100 hover:border-slate-300"
+                                    )}
+                                >
+                                    All Folders
+                                </button>
+                                {subjectsInActiveGrade.map((subj) => (
+                                    <button
+                                        key={subj}
+                                        onClick={() => setActiveSubject(subj)}
+                                        className={cn(
+                                            "flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold transition-all border",
+                                            activeSubject === subj
+                                                ? "bg-primary text-primary-foreground border-primary shadow-md shadow-primary/20"
+                                                : "bg-white text-slate-500 border-slate-100 hover:border-slate-300"
+                                        )}
+                                    >
+                                        <Folder className={cn("w-3.5 h-3.5", activeSubject === subj ? "fill-white/20" : "fill-slate-100")} />
+                                        {subj}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Heading for Active Selection */}
+                            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                                <div className="space-y-1">
+                                    <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                                        {GRADE_LABELS[activeGrade]}
+                                        {activeSubject !== 'all' && (
+                                            <>
+                                                <ChevronRight className="w-4 h-4 text-slate-300" />
+                                                <span className="text-primary">{activeSubject}</span>
+                                            </>
+                                        )}
+                                    </h2>
+                                    <p className="text-xs text-slate-500 font-medium tracking-tight">
+                                        {finalDisplayBooks.length} Modules available in this section
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Level 3: Content Grid */}
+                            {finalDisplayBooks.length > 0 ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 items-stretch">
+                                    {finalDisplayBooks.map((book) => (
+                                        <Card key={book.id} className="group relative overflow-hidden transition-all hover:shadow-xl hover:-translate-y-1 border-slate-100 shadow-sm bg-white h-full flex flex-col">
+                                            <div className="aspect-[3/4] relative bg-slate-50">
+                                                {book.cover_url ? (
+                                                    <img src={book.cover_url} className="w-full h-full object-cover" alt={book.title} />
+                                                ) : (
+                                                    <div className="absolute inset-0 flex items-center justify-center text-slate-200">
+                                                        <BookOpen className="w-12 h-12" />
+                                                    </div>
+                                                )}
+                                                <div className="absolute top-2 left-2 flex gap-1">
+                                                    {getStatusBadge(book.status)}
+                                                </div>
+                                                <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
+                                                    {book.is_teacher_only && (
+                                                        <div className="bg-amber-500/90 text-white rounded-full p-1.5 shadow-lg backdrop-blur-sm">
+                                                            <Lock className="w-3 h-3" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-sm">
+                                                    <Button size="icon" variant="secondary" className="rounded-full w-9 h-9" onClick={() => navigate(`/read/${book.id}`)}>
+                                                        <BookOpen className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="secondary" className="rounded-full w-9 h-9" onClick={() => reprocessBook.mutate(book)}>
+                                                        <RefreshCw className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="secondary" className="rounded-full w-9 h-9" onClick={() => openEditDialog(book)}>
+                                                        <Edit2 className="w-4 h-4" />
+                                                    </Button>
+                                                    <Button size="icon" variant="destructive" className="rounded-full w-9 h-9" onClick={() => deleteBook.mutate(book.id)}>
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="p-3 flex-grow flex flex-col">
+                                                <h3 className="font-bold text-sm text-slate-800 line-clamp-2 leading-tight h-[2.5rem] overflow-hidden flex items-start mt-0.5" title={book.title}>{book.title}</h3>
+                                                <p className="text-[10px] text-slate-400 mt-1 font-semibold uppercase tracking-wider">{book.subject || 'General'}</p>
+                                            </div>
+                                        </Card>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-3xl border border-dashed border-slate-200">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                                        <Folder className="w-8 h-8 text-slate-300" />
+                                    </div>
+                                    <h4 className="text-slate-900 font-bold mb-1">No modules found</h4>
+                                    <p className="text-slate-500 text-xs">There are no Quipper modules for this selection.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div >
+
+            {/* Edit Dialog */}
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                        <DialogTitle>Edit Quipper Module</DialogTitle>
+                    </DialogHeader>
+                    {editingBook && (
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            const finalSubject = subject === 'Other' ? customSubject : subject;
+                            updateBook.mutate({
+                                id: editingBook.id,
+                                title,
+                                gradeLevel,
+                                subject: finalSubject,
+                                isTeacherOnly
+                            });
+                        }} className="space-y-4 mt-4">
+                            <div className="space-y-2">
+                                <Label>Module Title</Label>
+                                <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Grade Level</Label>
+                                <Select value={gradeLevel.toString()} onValueChange={(v) => setGradeLevel(parseInt(v))}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(GRADE_LABELS).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                                <Label className="text-sm font-medium">Teacher Only?</Label>
+                                <Switch checked={isTeacherOnly} onCheckedChange={setIsTeacherOnly} />
+                            </div>
+                            <div className="flex justify-end gap-2 pt-4">
+                                <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+                                <Button type="submit" disabled={updateBook.isPending} className="gradient-primary">
+                                    {updateBook.isPending ? <Loader2 className="animate-spin" /> : 'Save Changes'}
+                                </Button>
+                            </div>
+                        </form>
+                    )}
+                </DialogContent>
+            </Dialog>
         </AdminLayout >
     );
 }

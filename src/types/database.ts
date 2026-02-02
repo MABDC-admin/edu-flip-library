@@ -1,12 +1,34 @@
 export type AppRole = 'admin' | 'student' | 'teacher';
 export type BookStatus = 'processing' | 'ready' | 'error';
 
+export interface School {
+  id: string;
+  name: string;
+  short_name: string;
+  slug: string;
+  logo_url: string | null;
+  created_at: string;
+}
+
+export interface AcademicYear {
+  id: string;
+  label: string;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Profile {
   id: string;
   name: string;
   grade_level: number | null;
   avatar_url: string | null;
   email?: string | null;
+  school_id: string | null;
+  academic_year_id: string | null;
+  student_id_display: string | null;
+  qr_code_data: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -15,6 +37,7 @@ export interface UserRole {
   id: string;
   user_id: string;
   role: AppRole;
+  school_id: string | null;
   created_at: string;
 }
 
@@ -30,6 +53,7 @@ export interface Book {
   is_teacher_only: boolean;
   status: BookStatus;
   uploaded_by: string | null;
+  school_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -65,8 +89,8 @@ export const GRADE_LABELS: Record<number, string> = {
   8: 'Grade 8',
   9: 'Grade 9',
   10: 'Grade 10',
-  11: 'Grade 11',
-  12: 'Grade 12',
+  11: 'Senior High',
+  12: 'Senior High',
 };
 
 export const GRADE_COLORS: Record<number, string> = {

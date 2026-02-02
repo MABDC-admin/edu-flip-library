@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { BookOpen, Sparkles, GraduationCap } from 'lucide-react';
+import { Sparkles, GraduationCap } from 'lucide-react';
 import { z } from 'zod';
 import { GRADE_LABELS } from '@/types/database';
 
@@ -133,8 +133,8 @@ export default function Auth() {
 
       <Card className="w-full max-w-md shadow-playful relative">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-2xl gradient-primary flex items-center justify-center shadow-lg">
-            <BookOpen className="w-8 h-8 text-primary-foreground" />
+          <div className="mx-auto w-20 h-20 rounded-2xl overflow-hidden flex items-center justify-center shadow-lg border-4 border-white">
+            <img src="/logo.jpg" alt="MABDC Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <CardTitle className="text-2xl font-display text-gradient">
