@@ -32,7 +32,7 @@ const formSchema = z.object({
 const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200MB
 
 export default function AdminQuipper() {
-  const { profile, school, isAdmin } = useAuth();
+  const { profile, school, isAdmin, isTeacher } = useAuth();
   const navigate = useNavigate();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -59,22 +59,19 @@ export default function AdminQuipper() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  // Check if user is admin before proceeding
-  if (!isAdmin) {
+  // Check if user is admin or teacher before proceeding
+  if (!isAdmin && !isTeacher) {
     navigate('/bookshelf');
     return null;
   }
 
   const { data: quipperBooks, isLoading } = useQuery({
-    queryKey: ['admin-quipper-books', school?.id],
+    queryKey: ['admin-quipper-books'],
     queryFn: async () => {
-      if (!school?.id) return [];
-      
       let query = supabase
         .from('books')
         .select('*')
         .eq('source', 'quipper')
-        .or(`school_id.eq.${school.id},school_id.is.null`)
         .order('created_at', { ascending: false });
 
       const { data, error } = await query;
@@ -82,7 +79,6 @@ export default function AdminQuipper() {
       if (error) throw error;
       return (data as any) as BookWithProgress[];
     },
-    enabled: !!school?.id,
   });
 
   const normalizedActiveGrade = filterGrade === '12' ? 11 : (filterGrade === 'all' ? 'all' : parseInt(filterGrade));

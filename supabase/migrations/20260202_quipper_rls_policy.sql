@@ -16,13 +16,13 @@ CREATE POLICY "Teachers and admins can manage internal books" ON public.books FO
     (public.is_admin(auth.uid()))
   );
 
--- Add a specific policy for Quipper content that only allows admins to manage
-CREATE POLICY "Admins only can manage Quipper content" ON public.books FOR ALL TO authenticated 
+-- Update Quipper content policy to allow both admins and teachers from any school to access
+CREATE POLICY "Admins and teachers can manage Quipper content" ON public.books FOR ALL TO authenticated 
   USING (
-    public.is_admin(auth.uid()) AND source = 'quipper'
+    (public.is_admin(auth.uid()) OR public.is_teacher(auth.uid())) AND source = 'quipper'
   )
   WITH CHECK (
-    public.is_admin(auth.uid()) AND source = 'quipper'
+    (public.is_admin(auth.uid()) OR public.is_teacher(auth.uid())) AND source = 'quipper'
   );
 
 -- Ensure admins have full access to all books regardless of source
@@ -31,7 +31,7 @@ CREATE POLICY "Admins full access to all books" ON public.books FOR ALL TO authe
   WITH CHECK (public.is_admin(auth.uid()));
 
 -- Ensure existing select policy remains in place for general visibility
--- But add specific condition for Quipper content to only be visible to admins/privileged users
+-- Update to allow Quipper content to be visible to admins and teachers from any school
 CREATE OR REPLACE FUNCTION public.can_access_book(_book_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
@@ -66,4 +66,11 @@ CREATE POLICY "Books visibility" ON public.books FOR SELECT TO authenticated
       AND NOT is_teacher_only
       AND source = 'internal'  -- Students can only access internal content
     )
+  );
+
+-- Create a specific policy for Quipper content visibility for admins and teachers
+CREATE POLICY "Quipper content visibility" ON public.books FOR SELECT TO authenticated 
+  USING (
+    (public.is_admin(auth.uid()) OR public.is_teacher(auth.uid()))
+    AND source = 'quipper'
   );
