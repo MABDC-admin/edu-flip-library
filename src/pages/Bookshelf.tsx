@@ -97,40 +97,6 @@ export default function Bookshelf() {
           ) : (
             <div className="pb-16">
               <div className="pb-16 space-y-12">
-                {/* Mobile/Student Grade Scroller (if sidebar is hidden) */}
-                {!showSidebar && (
-                  <div className="flex gap-2 overflow-x-auto pb-4 no-scrollbar">
-                    {Object.entries(GRADE_LABELS)
-                      .filter(([grade]) => {
-                        const gradeNum = parseInt(grade);
-                        if (gradeNum === 12) return false;
-                        if (!isAdmin && !isTeacher) {
-                          const studentGrade = profile?.grade_level === 12 ? 11 : profile?.grade_level;
-                          return gradeNum === studentGrade;
-                        }
-                        return true;
-                      })
-                      .map(([grade, label]) => {
-                        const gradeNum = parseInt(grade);
-                        const isActive = activeGrade === gradeNum;
-                        return (
-                          <button
-                            key={grade}
-                            onClick={() => setActiveGrade(gradeNum)}
-                            className={cn(
-                              "whitespace-nowrap px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                              isActive
-                                ? "bg-slate-900 text-white shadow-lg shadow-slate-900/10"
-                                : "bg-white text-slate-500 shadow-sm border border-slate-100"
-                            )}
-                          >
-                            {label}
-                          </button>
-                        );
-                      })}
-                  </div>
-                )}
-
                 {/* Subject Folders */}
                 <div className="flex flex-wrap gap-2.5">
                   <button
