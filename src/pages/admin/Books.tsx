@@ -116,15 +116,7 @@ export default function AdminBooks() {
     }, {} as Record<string | number, BookWithProgress[]>);
   };
 
-  console.log('AdminBooks State:', {
-    totalBooks: books?.length,
-    filtered: filteredBooks?.length,
-    schoolBooks: schoolBooks.length,
-    globalBooks: globalBooks.length,
-    activeSchoolId: school?.id,
-    filterSource,
-    searchQuery
-  });
+
 
   const activeGrouping = normalizedActiveGrade === 'all' ? 'grade_level' : 'subject';
   const schoolBooksGrouped = groupByProperty(schoolBooks, activeGrouping);
@@ -869,7 +861,10 @@ export default function AdminBooks() {
                                           >
                                             <RefreshCw className={cn("h-4 w-4 text-emerald-600", reprocessBook.isPending && "animate-spin")} />
                                           </Button>
-                                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => setBookIdToDelete(book.id)} title="Delete Book">
+                                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => {
+                                            setBookIdToDelete(book.id);
+                                            setIsDeleteOpen(true);
+                                          }} title="Delete Book">
                                             <Trash2 className="h-4 w-4" />
                                           </Button>
                                         </div>
@@ -940,7 +935,10 @@ export default function AdminBooks() {
                                       >
                                         <RefreshCw className={cn("h-3.5 w-3.5", reprocessBook.isPending && "animate-spin")} />
                                       </Button>
-                                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => setBookIdToDelete(book.id)} title="Delete">
+                                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => {
+                                        setBookIdToDelete(book.id);
+                                        setIsDeleteOpen(true);
+                                      }} title="Delete">
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </Button>
                                     </div>
@@ -1037,7 +1035,10 @@ export default function AdminBooks() {
                                           >
                                             <RefreshCw className={cn("h-4 w-4 text-emerald-600", reprocessBook.isPending && "animate-spin")} />
                                           </Button>
-                                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => setBookIdToDelete(book.id)} title="Delete Book">
+                                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/90" onClick={() => {
+                                            setBookIdToDelete(book.id);
+                                            setIsDeleteOpen(true);
+                                          }} title="Delete Book">
                                             <Trash2 className="h-4 w-4" />
                                           </Button>
                                         </div>
@@ -1108,7 +1109,10 @@ export default function AdminBooks() {
                                       >
                                         <RefreshCw className={cn("h-3.5 w-3.5", reprocessBook.isPending && "animate-spin")} />
                                       </Button>
-                                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => setBookIdToDelete(book.id)} title="Delete">
+                                      <Button size="sm" variant="destructive" className="h-8 w-8 p-0" onClick={() => {
+                                        setBookIdToDelete(book.id);
+                                        setIsDeleteOpen(true);
+                                      }} title="Delete">
                                         <Trash2 className="h-3.5 w-3.5" />
                                       </Button>
                                     </div>
