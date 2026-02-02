@@ -1,44 +1,85 @@
 
 
-# Plan: Link Grade 7 Students to MABDC School
+## Adjust Flipbook Default Zoom by Device Type
 
-## Current Status
-All 37 student accounts already exist in the database with:
-- Email addresses: g7nieva@gmail.com through g7narciso@gmail.com
-- Password: 123456
-- Grade Level: 7 (correctly set)
-- **school_id: NULL** (needs to be updated)
-- **academic_year_id: NULL** (needs to be updated)
+This plan adjusts the flipbook reader's default zoom level based on the user's device:
+- **Mobile** (under 768px): **150%** (1.5x)
+- **Tablet** (768px - 1023px): **175%** (1.75x)  
+- **Desktop** (1024px+): **200%** (2.0x) - current behavior maintained
 
-## Required Action
-Update the `profiles` table to assign these students to MABDC school with the active academic year.
+---
 
-## Database Details
-| Field | Value |
-|-------|-------|
-| MABDC School ID | `15f61d03-8aa8-422a-9faa-afbc8099adce` |
-| Active Academic Year | `07d916be-d44f-426f-853d-260bb38e4208` (2026-2027) |
-| Total Students | 37 |
+## Implementation
 
-## Implementation Steps
+### File: `src/pages/FlipbookReader.tsx`
 
-### Step 1: Update Profiles
-Execute a single SQL UPDATE to assign all 37 students to MABDC:
+**Change 1: Dynamic zoom initialization**
 
-```sql
-UPDATE profiles 
-SET 
-  school_id = '15f61d03-8aa8-422a-9faa-afbc8099adce',
-  academic_year_id = '07d916be-d44f-426f-853d-260bb38e4208'
-WHERE email LIKE 'g7%@gmail.com';
+The current code sets a static zoom value:
+```typescript
+const [zoom, setZoom] = useState(2.0);
 ```
 
-### Step 2: Verify Update
-Query the profiles table to confirm all students now have the correct school and academic year assignments.
+This will be updated to calculate the initial zoom based on screen width:
+```typescript
+const getInitialZoom = () => {
+  if (typeof window === 'undefined') return 1.75;
+  const width = window.innerWidth;
+  if (width < 768) return 1.5;      // Mobile: 150%
+  if (width < 1024) return 1.75;    // Tablet: 175%
+  return 2.0;                        // Desktop: 200%
+};
 
-## Expected Result
-After the update, all 37 Grade 7 students will:
-- Be linked to MABDC school
-- Be assigned to the 2026-2027 academic year
-- Be able to log in and access Grade 7 books for MABDC
+const [zoom, setZoom] = useState(getInitialZoom);
+```
+
+**Change 2: Handle orientation/resize changes**
+
+Add a resize listener to update zoom when device orientation changes or window is resized (preserving user's manual zoom adjustments):
+
+```typescript
+// Track if user has manually changed zoom
+const userChangedZoom = useRef(false);
+
+// Update zoom on resize only if user hasn't manually adjusted
+useEffect(() => {
+  const handleResize = () => {
+    if (!userChangedZoom.current) {
+      const width = window.innerWidth;
+      if (width < 768) setZoom(1.5);
+      else if (width < 1024) setZoom(1.75);
+      else setZoom(2.0);
+    }
+  };
+  
+  window.addEventListener('resize', handleResize);
+  return () => window.removeEventListener('resize', handleResize);
+}, []);
+```
+
+**Change 3: Track manual zoom changes**
+
+Update the zoom controls to mark when user manually adjusts:
+```typescript
+onZoomIn={() => {
+  userChangedZoom.current = true;
+  setZoom((z) => Math.min(z + 0.25, 3));
+}}
+onZoomOut={() => {
+  userChangedZoom.current = true;
+  setZoom((z) => Math.max(z - 0.25, 0.5));
+}}
+```
+
+---
+
+## Technical Details
+
+| Device | Breakpoint | Default Zoom |
+|--------|------------|--------------|
+| Mobile | < 768px | 150% |
+| Tablet | 768px - 1023px | 175% |
+| Desktop | >= 1024px | 200% |
+
+The implementation uses lazy initialization with `useState(getInitialZoom)` to calculate the correct zoom on first render, avoiding hydration mismatches and ensuring the proper value is set immediately.
 
