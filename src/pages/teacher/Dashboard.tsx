@@ -17,7 +17,7 @@ export default function TeacherDashboard() {
   const { user, isTeacher, isAdmin, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [selectedGrade, setSelectedGrade] = useState<number | null>(null);
+  const [selectedGrade, setSelectedGrade] = useState<number | null>(12);
   const [selectedBook, setSelectedBook] = useState<BookWithProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeSubject, setActiveSubject] = useState<string>('all');
@@ -114,7 +114,7 @@ export default function TeacherDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              <div className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2">
                 {Array.from({ length: 12 }, (_, i) => i + 1).map((grade) => {
                   const isSelected = selectedGrade === grade;
                   return (
@@ -122,7 +122,7 @@ export default function TeacherDashboard() {
                       key={grade}
                       onClick={() => setSelectedGrade(isSelected ? null : grade)}
                       className={cn(
-                        "w-full h-12 rounded-xl text-sm font-semibold transition-all shadow-sm border flex items-center justify-center",
+                        "h-12 min-w-[80px] rounded-xl text-sm font-semibold transition-all shadow-sm border flex items-center justify-center flex-shrink-0",
                         isSelected
                           ? "bg-primary text-primary-foreground border-primary scale-105"
                           : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600"
@@ -135,7 +135,7 @@ export default function TeacherDashboard() {
                 <button
                   onClick={() => setSelectedGrade(null)}
                   className={cn(
-                    "w-full h-12 rounded-xl text-sm font-semibold transition-all shadow-sm border flex items-center justify-center",
+                    "h-12 min-w-[80px] rounded-xl text-sm font-semibold transition-all shadow-sm border flex items-center justify-center flex-shrink-0",
                     selectedGrade === null
                       ? "bg-slate-800 text-white border-slate-800 scale-105"
                       : "bg-white hover:bg-slate-50 border-slate-200 text-slate-600"
