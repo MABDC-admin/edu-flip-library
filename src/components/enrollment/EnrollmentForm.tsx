@@ -59,7 +59,7 @@ export function EnrollmentForm({ onSuccess }: EnrollmentFormProps) {
 
             onSuccess?.();
         } catch (error: any) {
-            console.error('Enrollment error:', error);
+            
             toast({
                 title: 'Enrollment Failed',
                 description: error.message,

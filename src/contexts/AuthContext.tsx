@@ -43,15 +43,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 
     if (profileData) {
-      const pData = profileData as any;
-      setProfile(pData as Profile);
+      setProfile(profileData as Profile);
 
       // Fetch school if associated
-      if (pData.school_id) {
-        const { data: schoolData } = await (supabase as any)
+      if (profileData.school_id) {
+        const { data: schoolData } = await supabase
           .from('schools')
           .select('*')
-          .eq('id', pData.school_id)
+          .eq('id', profileData.school_id)
           .single();
         if (schoolData) setSchool(schoolData as School);
       } else {
@@ -64,7 +63,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userRoles = roleData?.map(r => r.role) || [];
 
         if (userRoles.includes('admin')) {
-          const { data: mabdcSchool } = await (supabase as any)
+          const { data: mabdcSchool } = await supabase
             .from('schools')
             .select('*')
             .eq('short_name', 'MABDC')
@@ -75,11 +74,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Fetch academic year if associated
-      if (pData.academic_year_id) {
-        const { data: ayData } = await (supabase as any)
+      if (profileData.academic_year_id) {
+        const { data: ayData } = await supabase
           .from('academic_years')
           .select('*')
-          .eq('id', pData.academic_year_id)
+          .eq('id', profileData.academic_year_id)
           .single();
         if (ayData) setAcademicYear(ayData as AcademicYear);
       } else {
@@ -94,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const userRoles = roleData?.map(r => r.role) || [];
 
         if (userRoles.includes('admin')) {
-          const { data: defaultAy } = await (supabase as any)
+          const { data: defaultAy } = await supabase
             .from('academic_years')
             .select('*')
             .eq('label', '2026-2027')
@@ -167,9 +166,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
         const userRoles = roleData?.map(r => r.role) || ['student'];
 
-        console.log(`[Auth] User logged in: ${email} (${userRoles.join(', ')}). Notifying admin...`);
 
-        const { data, error: invokeError } = await supabase.functions.invoke('notify-admin', {
+
+        const { data: _, error: invokeError } = await supabase.functions.invoke('notify-admin', {
           body: {
             type: 'login',
             user_email: email,
@@ -178,9 +177,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (invokeError) {
-          console.error('[Auth] Admin notification failed:', invokeError);
+          // Silently handle notification error
         } else {
-          console.log('[Auth] Admin notification sent:', data);
+          // Notification sent successfully
         }
       }
     }
@@ -203,7 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!error && sessionData?.user) {
-      console.log(`[Auth] New registration: ${email}. Notifying admin...`);
+
       supabase.functions.invoke('notify-admin', {
         body: {
           type: 'registration',

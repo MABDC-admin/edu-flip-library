@@ -233,8 +233,8 @@ export default function AdminQuipper() {
         mutationFn: async (bookId: string) => {
             const { error } = await supabase.from('books').delete().eq('id', bookId);
             if (error) throw error;
-            await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]).catch(console.error);
-            await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
+            
+            
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-quipper-books', school?.id] });

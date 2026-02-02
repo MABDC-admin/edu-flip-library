@@ -139,10 +139,10 @@ export default function AdminClasses() {
                 .from('student_sections')
                 .select('student_id')
                 .eq('academic_year_id', academicYear.id);
-            const enrolledIds = enrollments?.map((e: any) => e.student_id) || [];
+            const enrolledIds = enrollments?.map((e: { student_id: string }) => e.student_id) || [];
 
             // 2. Get students of grade
-            let query = supabase
+            const query = supabase
                 .from('profiles')
                 .select('*')
                 .eq('school_id', school.id)

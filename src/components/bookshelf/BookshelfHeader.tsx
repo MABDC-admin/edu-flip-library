@@ -5,7 +5,7 @@ import { GRADE_LABELS } from '@/types/database';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface BookshelfHeaderProps {
-    profile: any;
+    profile: Profile | null;
     isAdmin: boolean;
     isTeacher: boolean;
     onSignOut: () => void;

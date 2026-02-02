@@ -50,7 +50,7 @@ export default function AttendanceScanner() {
                 }
 
                 // 2. Log attendance
-                const { error: logError } = await supabase.from('attendance_logs' as any).insert({
+                const { error: logError } = await (supabase as any).from('attendance_logs').insert({
                     profile_id: profile.id,
                     school_id: school?.id,
                     academic_year_id: academicYear?.id,
@@ -85,7 +85,9 @@ export default function AttendanceScanner() {
         }
 
         return () => {
-            scanner.clear().catch(error => console.error("Failed to clear scanner", error));
+            scanner.clear().catch(() => {
+                // Silently handle scanner cleanup error
+            });
         };
     }, [school, academicYear, isProcessing]);
 

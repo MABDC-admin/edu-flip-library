@@ -63,7 +63,8 @@ export default function FlipbookReader() {
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
   const { data: pages } = useBookPages(bookId);
-  const { user, role } = useAuth();
+  const { user, roles } = useAuth();
+  const role = roles[0] || 'student';
   const notificationSentRef = useRef(false);
 
   useEffect(() => {
@@ -76,7 +77,9 @@ export default function FlipbookReader() {
           user_role: role || 'student',
           book_title: book.title,
         }
-      }).catch(console.error);
+      }).catch(() => {
+        // Silently handle notification error
+      });
     }
   }, [book, user, role]);
 

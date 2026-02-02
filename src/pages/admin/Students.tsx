@@ -40,19 +40,20 @@ export default function AdminStudents() {
   const { toast } = useToast();
 
   const { data: students, isLoading } = useQuery({
-    queryKey: ['admin-students', school?.id],
+    queryKey: ['admin-students', school?.id, academicYear?.id],
     queryFn: async () => {
-      if (!school?.id) return [];
+      if (!school?.id || !academicYear?.id) return [];
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('school_id', school.id)
+        .eq('academic_year_id', academicYear.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       return data as Profile[];
     },
-    enabled: !!school?.id
+    enabled: !!school?.id && !!academicYear?.id
   });
 
   const createStudent = useMutation({

@@ -348,8 +348,8 @@ export default function AdminBooks() {
 
       if (error) throw error;
 
-      await supabase.storage.from('pdf-uploads').remove([`${bookId}/source.pdf`]).catch(console.error);
-      await supabase.storage.from('book-covers').remove([`${bookId}/cover.png`]).catch(console.error);
+      
+      
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-books'] });

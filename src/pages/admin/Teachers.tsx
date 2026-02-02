@@ -90,7 +90,7 @@ export default function AdminTeachers() {
 
             if (roleError) {
                 // Determine if we need to rollback? For now just log
-                console.error("Role assignment failed", roleError);
+                
                 throw roleError;
             }
 
@@ -100,7 +100,7 @@ export default function AdminTeachers() {
                 name: data.name
             }).eq('id', authData.user.id);
 
-            if (profileError) console.error("Profile update failed", profileError);
+            
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-teachers'] });
@@ -136,9 +136,10 @@ export default function AdminTeachers() {
     const removeTeacherMutation = useMutation({
         mutationFn: async (id: string) => {
             // Remove 'teacher' role for this school
+            if (!school?.id) throw new Error('School not selected');
             const { error } = await supabase.from('user_roles').delete()
                 .eq('user_id', id)
-                .eq('school_id', school?.id)
+                .eq('school_id', school.id)
                 .eq('role', 'teacher');
             if (error) throw error;
         },

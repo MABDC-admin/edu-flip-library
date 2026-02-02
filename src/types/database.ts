@@ -70,8 +70,8 @@ export interface BookPage {
 }
 
 // Extended types with relations
-export interface BookWithProgress extends Book {
-}
+// BookWithProgress will be extended with progress data when implemented
+export type BookWithProgress = Book;
 
 export interface BookWithPages extends Book {
   book_pages: BookPage[];

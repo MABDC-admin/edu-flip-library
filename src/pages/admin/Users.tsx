@@ -56,7 +56,7 @@ export default function AdminUsers() {
         queryKey: ['admin-roles', school?.id],
         queryFn: async () => {
             if (!school?.id) return [];
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('user_roles')
                 .select('*')
                 .eq('school_id', school.id);
@@ -72,18 +72,17 @@ export default function AdminUsers() {
         return roles?.filter(r => r.user_id === userId).map(r => r.role) || [];
     };
 
-    const { data: allShsBooks } = useQuery({
-        queryKey: ['admin-shs-books', school?.id],
+    const { data: allBooks } = useQuery({
+        queryKey: ['admin-all-books', school?.id],
         queryFn: async () => {
             if (!school?.id) return [];
             const { data, error } = await supabase.from('books')
                 .select('*')
-                .in('grade_level', [11, 12])
                 .eq('status', 'ready')
                 .eq('school_id', school.id)
                 .order('title');
             if (error) throw error;
-            return (data as any) as Book[];
+            return data as Book[];
         },
         enabled: !!school?.id
     });
@@ -92,11 +91,12 @@ export default function AdminUsers() {
         queryKey: ['admin-user-assignments', editingUser?.id],
         enabled: !!editingUser && isAssignDialogOpen,
         queryFn: async () => {
-            const { data, error } = await supabase.from('user_assigned_books' as any)
+            if (!editingUser?.id) return [];
+            const { data, error } = await supabase.from('user_assigned_books')
                 .select('book_id')
-                .eq('user_id', editingUser?.id);
+                .eq('user_id', editingUser.id);
             if (error) throw error;
-            return (data as any[]).map(d => d.book_id);
+            return data.map(d => d.book_id);
         },
     });
 
@@ -107,14 +107,14 @@ export default function AdminUsers() {
             const toRemove = currentAssignments.filter(id => !bookIds.includes(id));
 
             if (toAdd.length > 0) {
-                const { error } = await supabase.from('user_assigned_books' as any).insert(
+                const { error } = await supabase.from('user_assigned_books').insert(
                     toAdd.map(bookId => ({ user_id: userId, book_id: bookId }))
                 );
                 if (error) throw error;
             }
 
             if (toRemove.length > 0) {
-                const { error } = await supabase.from('user_assigned_books' as any).delete()
+                const { error } = await supabase.from('user_assigned_books').delete()
                     .eq('user_id', userId)
                     .in('book_id', toRemove);
                 if (error) throw error;
@@ -254,21 +254,21 @@ export default function AdminUsers() {
             if (!data.user) throw new Error("Failed to create user");
 
             // 2. Insert into user_roles
-            const { error: roleError } = await supabase.from('user_roles').insert({
+            const { error: _roleError } = await supabase.from('user_roles').insert({
                 user_id: data.user.id,
                 role: userData.role as 'student' | 'teacher' | 'admin'
             });
 
-            if (roleError) console.error("Role assignment failed:", roleError);
+            
 
             // 3. Update Profile
-            const { error: profileError } = await supabase.from('profiles').update({
+            const { error: _profileError } = await supabase.from('profiles').update({
                 school_id: school?.id,
                 grade_level: userData.role === 'student' ? userData.gradeLevel : null,
                 name: userData.name
             }).eq('id', data.user.id);
 
-            if (profileError) console.error("Profile update failed:", profileError);
+            
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['admin-profiles'] });
@@ -338,20 +338,18 @@ export default function AdminUsers() {
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
-                                            {(user.grade_level === 11 || user.grade_level === 12) && (
-                                                <Button
-                                                    variant="secondary"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setEditingUser(user);
-                                                        setSelectedBooks(userAssignments || []);
-                                                        setIsAssignDialogOpen(true);
-                                                    }}
-                                                    className="bg-accent/10 hover:bg-accent/20 text-accent font-bold"
-                                                >
-                                                    Assign Books
-                                                </Button>
-                                            )}
+                                            <Button
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setEditingUser(user);
+                                                    setSelectedBooks(userAssignments || []);
+                                                    setIsAssignDialogOpen(true);
+                                                }}
+                                                className="bg-accent/10 hover:bg-accent/20 text-accent font-bold"
+                                            >
+                                                Assign Books
+                                            </Button>
                                             <Button variant="ghost" size="sm" onClick={() => handleEditClick(user)}>Edit Roles</Button>
                                             <Button variant="ghost" size="icon" title="Reset Password" onClick={() => {
                                                 setEditingUser(user);
@@ -532,12 +530,12 @@ export default function AdminUsers() {
             <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>Assign Senior High Books to {editingUser?.name}</DialogTitle>
+                        <DialogTitle>Assign Books to {editingUser?.name}</DialogTitle>
                     </DialogHeader>
                     <div className="py-4 space-y-4">
                         <ScrollArea className="h-[400px] pr-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {allShsBooks?.map((book) => (
+                                {allBooks?.map((book) => (
                                     <div key={book.id} className="flex items-center space-x-3 p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors">
                                         <Checkbox
                                             id={`book-${book.id}`}
