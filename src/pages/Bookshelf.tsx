@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookGrid } from '@/components/books/BookGrid';
 import { Folder, Search } from 'lucide-react';
-import { GRADE_LABELS } from '@/types/database';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
