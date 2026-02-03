@@ -159,29 +159,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     if (!error) {
+      // Email notifications paused
       // Get role after sign in
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        // Fetch role to send in notification
-        const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
-        const userRoles = roleData?.map(r => r.role) || ['student'];
-
-
-
-        const { data: _, error: invokeError } = await supabase.functions.invoke('notify-admin', {
-          body: {
-            type: 'login',
-            user_email: email,
-            user_role: userRoles[0], // approximate for old API
-          }
-        });
-
-        if (invokeError) {
-          // Silently handle notification error
-        } else {
-          // Notification sent successfully
-        }
-      }
+      // const { data: { user } } = await supabase.auth.getUser();
+      // if (user) {
+      //   const { data: roleData } = await supabase.from('user_roles').select('role').eq('user_id', user.id);
+      //   const userRoles = roleData?.map(r => r.role) || ['student'];
+      //   await supabase.functions.invoke('notify-admin', {
+      //     body: {
+      //       type: 'login',
+      //       user_email: email,
+      //       user_role: userRoles[0],
+      //     }
+      //   });
+      // }
     }
     return { error: error as Error | null };
   };
@@ -203,13 +194,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!error && sessionData?.user) {
 
-      supabase.functions.invoke('notify-admin', {
-        body: {
-          type: 'registration',
-          user_email: email,
-          user_role: 'student', // Default for signups
-        }
-      });
+      // Email notifications paused
+      // supabase.functions.invoke('notify-admin', {
+      //   body: {
+      //     type: 'registration',
+      //     user_email: email,
+      //     user_role: 'student',
+      //   }
+      // });
     }
 
     return { error: error as Error | null };

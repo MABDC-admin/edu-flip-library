@@ -10,7 +10,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+// import { useAuth } from '@/contexts/AuthContext'; // Paused for email notifications
 
 // react-pdf imports
 import { Document, Page, pdfjs } from 'react-pdf';
@@ -63,25 +63,7 @@ export default function FlipbookReader() {
 
   const { data: book, isLoading: bookLoading } = useBook(bookId);
   const { data: pages } = useBookPages(bookId);
-  const { user, roles } = useAuth();
-  const role = roles[0] || 'student';
-  const notificationSentRef = useRef(false);
-
-  useEffect(() => {
-    if (book && user && !notificationSentRef.current) {
-      notificationSentRef.current = true;
-      supabase.functions.invoke('notify-admin', {
-        body: {
-          type: 'read',
-          user_email: user.email,
-          user_role: role || 'student',
-          book_title: book.title,
-        }
-      }).catch(() => {
-        // Silently handle notification error
-      });
-    }
-  }, [book, user, role]);
+  // Email notifications paused - auth/role tracking removed
 
   const getInitialZoom = () => {
     if (typeof window === 'undefined') return 1.75;
