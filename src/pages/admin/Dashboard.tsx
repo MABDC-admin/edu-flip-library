@@ -5,10 +5,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Users,
-  Calendar as CalendarIcon,
   CheckSquare,
   BookOpen,
-  MoreHorizontal,
   Plus,
   ArrowRight
 } from 'lucide-react';

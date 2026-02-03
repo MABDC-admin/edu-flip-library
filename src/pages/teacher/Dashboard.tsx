@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { TeacherLayout } from '@/components/teacher/TeacherLayout';
-import { GradeFilter } from '@/components/teacher/GradeFilter';
+
 import { TeacherBookGrid } from '@/components/teacher/TeacherBookGrid';
 import { BookDetailsDialog } from '@/components/teacher/BookDetailsDialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -20,7 +20,7 @@ export default function TeacherDashboard() {
   const [selectedGrade, setSelectedGrade] = useState<number | null>(12);
   const [selectedBook, setSelectedBook] = useState<BookWithProgress | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [activeSubject, setActiveSubject] = useState<string>('all');
+  const [_activeSubject, _setActiveSubject] = useState<string>('all');
 
   // Fetch books
   const { data: books, isLoading: booksLoading } = useQuery({
@@ -66,16 +66,6 @@ export default function TeacherDashboard() {
     return grouped;
   }, [filteredBooks]);
 
-  // Get unique subjects for the active selection
-  const subjectsInActiveGrade = useMemo(() => {
-    const subjects = new Set<string>();
-    filteredBooks.forEach(b => subjects.add(b.subject || 'Uncategorized'));
-    return Array.from(subjects).sort();
-  }, [filteredBooks]);
-
-  const finalQuipperBooks = useMemo(() => {
-    return [];
-  }, []);
 
   const handleBookClick = (book: BookWithProgress) => {
     setSelectedBook(book);
