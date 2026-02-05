@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 }
 
 Deno.serve(async (req) => {
@@ -12,6 +12,18 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Validate API key
+    const apiKey = req.headers.get('x-api-key')
+    const expectedKey = Deno.env.get('SYNC_API_KEY')
+
+    if (!apiKey || apiKey !== expectedKey) {
+      console.log('Unauthorized: Invalid or missing API key')
+      return new Response(JSON.stringify({ error: 'Unauthorized: Invalid API key' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     
