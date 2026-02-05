@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+// import { useEffect } from 'react'; // Auth redirect disabled
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { BookGrid } from '@/components/books/BookGrid';
@@ -23,29 +23,28 @@ export default function Bookshelf() {
   const { setSearchQuery, setActiveGrade, setActiveSubject } = actions;
   const { unifiedGrouped, subjectsInActiveGrade } = data;
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      navigate('/auth', { replace: true });
-    } else if (!authLoading && user && isTeacher && !isAdmin) {
-      // Teachers should go to their dashboard instead of bookshelf
-      navigate('/teacher', { replace: true });
-    }
-  }, [authLoading, user, isTeacher, isAdmin, navigate]);
+  // Auth check disabled - bookshelf is now public
+  // useEffect(() => {
+  //   if (!authLoading && !user) {
+  //     navigate('/auth', { replace: true });
+  //   } else if (!authLoading && user && isTeacher && !isAdmin) {
+  //     navigate('/teacher', { replace: true });
+  //   }
+  // }, [authLoading, user, isTeacher, isAdmin, navigate]);
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/auth');
   };
 
-  if (authLoading) {
+  // Loading state only shown for authenticated users
+  if (authLoading && user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
       </div>
     );
   }
-
-  if (!user) return null;
 
   const showSidebar = isAdmin || isTeacher;
 
