@@ -1,24 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Book, BookWithProgress, BookPage } from '@/types/database';
-import { useAuth } from '@/contexts/AuthContext';
 
 export function useBooks() {
-  const { user } = useAuth();
-
   return useQuery({
     queryKey: ['books'],
     queryFn: async (): Promise<BookWithProgress[]> => {
       const { data: books, error } = await supabase
         .from('books')
         .select('*')
+        .eq('status', 'ready')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
       return ((books || []) as any) as BookWithProgress[];
     },
-    enabled: !!user,
   });
 }
 
