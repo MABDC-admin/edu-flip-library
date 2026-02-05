@@ -1,47 +1,51 @@
 
+## Plan: Add API Key Authentication to sync-books Endpoint
 
-## Fix Admin Login for sottodennis@gmail.com
-
-The user exists in the database with admin role, but the password doesn't match. The auth logs show "Invalid login credentials" errors. This needs a password reset.
-
----
-
-## Current State
-
-| Field | Value |
-|-------|-------|
-| Email | sottodennis@gmail.com |
-| User ID | 3119691b-c52a-4099-9b75-627187ba9da2 |
-| Role | admin |
-| Email Confirmed | Yes (2026-01-30) |
-| Last Sign In | 2026-02-02 |
+### Overview
+Add `x-api-key` header authentication to secure the sync-books endpoint, allowing your other project to authenticate using a shared secret key.
 
 ---
 
-## Solution
+### Implementation Steps
 
-Run a database migration to reset the password to "Denskie123":
+**Step 1: Add the SYNC_API_KEY Secret**
+- Request you to set a `SYNC_API_KEY` secret value
+- This same key must be configured in your other project to match
 
-```sql
-UPDATE auth.users 
-SET encrypted_password = crypt('Denskie123', gen_salt('bf')),
-    updated_at = NOW()
-WHERE email = 'sottodennis@gmail.com';
+**Step 2: Update CORS Headers**
+- Add `x-api-key` to the allowed headers so browsers don't block the header in cross-origin requests
+
+**Step 3: Add API Key Validation Logic**
+- Extract the `x-api-key` header from incoming requests
+- Compare it against the stored `SYNC_API_KEY` secret
+- Return 401 Unauthorized if the key is missing or invalid
+- Allow the request to proceed if the key matches
+
+---
+
+### Technical Details
+
+```typescript
+// Updated CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+}
+
+// API key validation (added before database queries)
+const apiKey = req.headers.get('x-api-key')
+const expectedKey = Deno.env.get('SYNC_API_KEY')
+
+if (!apiKey || apiKey !== expectedKey) {
+  return new Response(JSON.stringify({ error: 'Unauthorized: Invalid API key' }), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status: 401,
+  })
+}
 ```
 
 ---
 
-## Technical Details
-
-- The `crypt()` function with `gen_salt('bf')` creates a bcrypt-hashed password
-- This is the same method Supabase Auth uses internally
-- No other changes needed - the user profile and role are correctly configured
-
----
-
-## After Implementation
-
-You will be able to log in with:
-- **Email**: sottodennis@gmail.com
-- **Password**: Denskie123
-
+### After Implementation
+- You'll need to set the same `SYNC_API_KEY` value in both projects
+- Your other project can then call the endpoint with the `x-api-key` header
