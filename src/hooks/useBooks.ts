@@ -1,8 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { Book, BookWithProgress, BookPage } from '@/types/database';
 
 export function useBooks() {
+  const { user } = useAuth();
+
   return useQuery({
     queryKey: ['books'],
     queryFn: async (): Promise<BookWithProgress[]> => {
@@ -16,6 +19,7 @@ export function useBooks() {
 
       return ((books || []) as any) as BookWithProgress[];
     },
+    enabled: !!user,
   });
 }
 
