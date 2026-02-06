@@ -9,8 +9,12 @@ const envSchema = z.object({
 const _env = envSchema.safeParse(import.meta.env);
 
 if (!_env.success) {
-    
-    throw new Error("Invalid environment variables");
+    console.warn("Missing environment variables:", _env.error.flatten().fieldErrors);
 }
 
-export const env = _env.data;
+export const env = _env.success
+    ? _env.data
+    : {
+          VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL ?? "",
+          VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",
+      };
