@@ -100,6 +100,14 @@ export default function FlipbookReader() {
   const [showThumbnailGrid, setShowThumbnailGrid] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
 
+  // Pan & zoom state
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const isPanningRef = useRef(false);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const panOffsetStartRef = useRef({ x: 0, y: 0 });
+  const [isSpaceHeld, setIsSpaceHeld] = useState(false);
+  const mainRef = useRef<HTMLElement>(null);
+
   // Annotation system
   const annotationState = useAnnotations();
   const [selectedEmoji, setSelectedEmoji] = useState('');
@@ -209,9 +217,17 @@ export default function FlipbookReader() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Spacebar: hold to pan (prevent default scroll)
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) {
+          setIsSpaceHeld(true);
+        }
+        return;
+      }
+
       switch (e.key) {
         case 'ArrowRight':
-        case ' ':
           handleNext();
           break;
         case 'ArrowLeft':
@@ -228,12 +244,27 @@ export default function FlipbookReader() {
             navigate(-1);
           }
           break;
+        // Reset pan to center
+        case '0':
+          setPanOffset({ x: 0, y: 0 });
+          break;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === ' ' || e.code === 'Space') {
+        setIsSpaceHeld(false);
+        isPanningRef.current = false;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleNext, handlePrev, isFullscreen, navigate, showThumbnailGrid]);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [handleNext, handlePrev, isFullscreen, navigate, showThumbnailGrid, annotationState.isAnnotationMode, handleCloseAnnotationMode]);
 
   const toggleFullscreen = async () => {
     if (!containerRef.current) return;
@@ -267,6 +298,61 @@ export default function FlipbookReader() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Scroll-to-zoom handler on the main viewing area
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      // Only zoom if Ctrl/Meta is held or pinch gesture (ctrlKey for trackpad pinch)
+      // Otherwise let normal scroll happen for accessibility
+      e.preventDefault();
+      const delta = -e.deltaY;
+      const zoomStep = 0.08;
+      const change = delta > 0 ? zoomStep : -zoomStep;
+
+      setZoom((prev) => {
+        const next = Math.round(Math.max(0.5, Math.min(4, prev + change)) * 100) / 100;
+        return next;
+      });
+      userChangedZoom.current = true;
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Spacebar + drag to pan
+  const handlePanPointerDown = useCallback((e: React.PointerEvent) => {
+    if (!isSpaceHeld) return;
+    e.preventDefault();
+    isPanningRef.current = true;
+    panStartRef.current = { x: e.clientX, y: e.clientY };
+    panOffsetStartRef.current = { ...panOffset };
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+  }, [isSpaceHeld, panOffset]);
+
+  const handlePanPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isPanningRef.current) return;
+    const dx = e.clientX - panStartRef.current.x;
+    const dy = e.clientY - panStartRef.current.y;
+    setPanOffset({
+      x: panOffsetStartRef.current.x + dx,
+      y: panOffsetStartRef.current.y + dy,
+    });
+  }, []);
+
+  const handlePanPointerUp = useCallback(() => {
+    isPanningRef.current = false;
+  }, []);
+
+  // Reset pan when zoom returns to 1 or below
+  useEffect(() => {
+    if (zoom <= 1) {
+      setPanOffset({ x: 0, y: 0 });
+    }
+  }, [zoom]);
 
   const touchStartX = useRef<number | null>(null);
 
@@ -366,9 +452,19 @@ export default function FlipbookReader() {
       />
 
       <main
-        className={cn("flex-1 flex items-center justify-center relative overflow-hidden", !isMaximized && "p-4")}
+        ref={mainRef}
+        className={cn(
+          "flex-1 flex items-center justify-center relative overflow-hidden",
+          !isMaximized && "p-4",
+          isSpaceHeld && !isPanningRef.current && "cursor-grab",
+          isSpaceHeld && isPanningRef.current && "cursor-grabbing",
+        )}
         onTouchStart={!annotationState.isAnnotationMode ? handleTouchStart : undefined}
         onTouchEnd={!annotationState.isAnnotationMode ? handleTouchEnd : undefined}
+        onPointerDown={handlePanPointerDown}
+        onPointerMove={handlePanPointerMove}
+        onPointerUp={handlePanPointerUp}
+        onPointerCancel={handlePanPointerUp}
       >
         {!flipbookPages && (
           <div className="hidden">
@@ -414,8 +510,13 @@ export default function FlipbookReader() {
         </div>
 
         <div
-          className="relative transition-transform duration-300 z-10"
-          style={{ transform: `scale(${zoom})` }}
+          className={cn(
+            "relative z-10",
+            !isPanningRef.current && "transition-transform duration-300"
+          )}
+          style={{
+            transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+          }}
         >
           {/* ===== ANNOTATION MODE: Static single-page view (no flip animation) ===== */}
           {annotationState.isAnnotationMode ? (
@@ -588,12 +689,18 @@ export default function FlipbookReader() {
         zoom={zoom}
         onZoomIn={() => {
           userChangedZoom.current = true;
-          setZoom((z) => Math.min(z + 0.25, 3));
+          setZoom((z) => Math.min(z + 0.25, 4));
         }}
         onZoomOut={() => {
           userChangedZoom.current = true;
           setZoom((z) => Math.max(z - 0.25, 0.5));
         }}
+        onResetView={() => {
+          setPanOffset({ x: 0, y: 0 });
+          setZoom(getInitialZoom());
+          userChangedZoom.current = false;
+        }}
+        isPanned={panOffset.x !== 0 || panOffset.y !== 0}
         pdfUrl={pdfUrl}
         isVisible={!isMaximized}
       />
