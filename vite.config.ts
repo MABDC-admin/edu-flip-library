@@ -1,8 +1,27 @@
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import type { Plugin } from "vite";
 
 import { visualizer } from "rollup-plugin-visualizer";
 import { VitePWA } from "vite-plugin-pwa";
+
+// Custom plugin to resolve @/ alias dynamically using Vite's resolved root
+// This ensures the alias works both when running directly and through v0's proxy config
+function aliasResolverPlugin(): Plugin {
+  let srcDir = "";
+  return {
+    name: "dynamic-alias-resolver",
+    configResolved(config) {
+      srcDir = path.resolve(config.root, "src");
+    },
+    resolveId(source) {
+      if (source.startsWith("@/")) {
+        return path.resolve(srcDir, source.slice(2));
+      }
+      return null;
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 // Export as a plain object so v0 environment can spread it correctly
@@ -16,6 +35,7 @@ export default {
   },
   plugins: [
     react(),
+    aliasResolverPlugin(),
     visualizer({ open: false, filename: "bundle-analysis.html" }),
     VitePWA({
       registerType: "autoUpdate",
@@ -49,9 +69,5 @@ export default {
       },
     }),
   ].filter(Boolean),
-  resolve: {
-    alias: {
-      "@": path.resolve("./src"),
-    },
-  },
+
 };
