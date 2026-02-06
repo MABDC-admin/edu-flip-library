@@ -1,51 +1,74 @@
 
-## Plan: Add API Key Authentication to sync-books Endpoint
+
+## Plan: Re-enable Login Requirement for Bookshelf
 
 ### Overview
-Add `x-api-key` header authentication to secure the sync-books endpoint, allowing your other project to authenticate using a shared secret key.
+Restore the authentication requirement on the bookshelf page so only logged-in users can access books. Unauthenticated users will be redirected to the login page.
 
 ---
 
 ### Implementation Steps
 
-**Step 1: Add the SYNC_API_KEY Secret**
-- Request you to set a `SYNC_API_KEY` secret value
-- This same key must be configured in your other project to match
+**Step 1: Restore Auth Redirect in Bookshelf.tsx**
+- Uncomment the `useEffect` import
+- Uncomment and restore the auth check that redirects unauthenticated users to `/auth`
+- Keep the teacher redirect logic (teachers go to `/teacher` dashboard)
 
-**Step 2: Update CORS Headers**
-- Add `x-api-key` to the allowed headers so browsers don't block the header in cross-origin requests
+**Step 2: Restore User Dependency in useBooks Hook**
+- Re-import `useAuth` from the auth context
+- Add back `enabled: !!user` to the query so it only runs when a user is authenticated
+- This prevents unnecessary API calls for unauthenticated visitors
 
-**Step 3: Add API Key Validation Logic**
-- Extract the `x-api-key` header from incoming requests
-- Compare it against the stored `SYNC_API_KEY` secret
-- Return 401 Unauthorized if the key is missing or invalid
-- Allow the request to proceed if the key matches
+**Step 3: Update Loading State in Bookshelf.tsx**
+- Adjust the loading check to show spinner during auth loading for all visitors (not just authenticated users)
 
 ---
 
 ### Technical Details
 
+**Bookshelf.tsx changes:**
 ```typescript
-// Updated CORS headers
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
+import { useEffect } from 'react'; // Uncomment
+
+// Restore auth redirect
+useEffect(() => {
+  if (!authLoading && !user) {
+    navigate('/auth', { replace: true });
+  } else if (!authLoading && user && isTeacher && !isAdmin) {
+    navigate('/teacher', { replace: true });
+  }
+}, [authLoading, user, isTeacher, isAdmin, navigate]);
+
+// Update loading check
+if (authLoading) {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+    </div>
+  );
 }
+```
 
-// API key validation (added before database queries)
-const apiKey = req.headers.get('x-api-key')
-const expectedKey = Deno.env.get('SYNC_API_KEY')
+**useBooks.ts changes:**
+```typescript
+import { useAuth } from '@/contexts/AuthContext';
 
-if (!apiKey || apiKey !== expectedKey) {
-  return new Response(JSON.stringify({ error: 'Unauthorized: Invalid API key' }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    status: 401,
-  })
+export function useBooks() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['books'],
+    queryFn: async (): Promise<BookWithProgress[]> => {
+      // ... existing fetch logic
+    },
+    enabled: !!user, // Only fetch when authenticated
+  });
 }
 ```
 
 ---
 
-### After Implementation
-- You'll need to set the same `SYNC_API_KEY` value in both projects
-- Your other project can then call the endpoint with the `x-api-key` header
+### Notes
+- The public read RLS policy on books can remain in place (it doesn't affect security since the frontend will redirect)
+- FlipbookReader also lacks auth protection, but it currently relies on book data which requires auth - you may want to add explicit protection there too
+
