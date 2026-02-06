@@ -10,6 +10,16 @@ import {
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 // import { useAuth } from '@/contexts/AuthContext'; // Paused for email notifications
 
 // react-pdf imports
@@ -94,6 +104,31 @@ export default function FlipbookReader() {
   const annotationState = useAnnotations();
   const [selectedEmoji, setSelectedEmoji] = useState('');
   const [selectedSticker, setSelectedSticker] = useState('');
+  const [showCloseDialog, setShowCloseDialog] = useState(false);
+
+  const hasAnnotations = Object.values(annotationState.annotations).some(
+    (pageAnnotations) => pageAnnotations.length > 0
+  );
+
+  // Handles closing annotation mode with optional confirmation
+  const handleCloseAnnotationMode = useCallback(() => {
+    if (hasAnnotations) {
+      setShowCloseDialog(true);
+    } else {
+      annotationState.toggleAnnotationMode();
+    }
+  }, [hasAnnotations, annotationState]);
+
+  const confirmCloseAnnotations = useCallback(() => {
+    annotationState.clearAllAnnotations();
+    annotationState.toggleAnnotationMode();
+    setShowCloseDialog(false);
+  }, [annotationState]);
+
+  const keepAndClose = useCallback(() => {
+    annotationState.toggleAnnotationMode();
+    setShowCloseDialog(false);
+  }, [annotationState]);
 
   useEffect(() => {
     const calculateDimensions = () => {
@@ -149,36 +184,42 @@ export default function FlipbookReader() {
   }, []);
 
   const handleNext = useCallback(() => {
-    if (flipBookRef.current?.pageFlip()) {
+    if (annotationState.isAnnotationMode) {
+      setCurrentPage((p) => Math.min(p + 1, totalPages));
+    } else if (flipBookRef.current?.pageFlip()) {
       flipBookRef.current.pageFlip().flipNext();
     }
-  }, []);
+  }, [annotationState.isAnnotationMode, totalPages]);
 
   const handlePrev = useCallback(() => {
-    if (flipBookRef.current?.pageFlip()) {
+    if (annotationState.isAnnotationMode) {
+      setCurrentPage((p) => Math.max(p - 1, 1));
+    } else if (flipBookRef.current?.pageFlip()) {
       flipBookRef.current.pageFlip().flipPrev();
     }
-  }, []);
+  }, [annotationState.isAnnotationMode]);
 
   const goToPage = useCallback((page: number) => {
-    if (flipBookRef.current?.pageFlip()) {
+    if (annotationState.isAnnotationMode) {
+      setCurrentPage(page);
+    } else if (flipBookRef.current?.pageFlip()) {
       flipBookRef.current.pageFlip().turnToPage(page - 1);
     }
-  }, []);
+  }, [annotationState.isAnnotationMode]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       switch (e.key) {
         case 'ArrowRight':
         case ' ':
-          if (!annotationState.isAnnotationMode) handleNext();
+          handleNext();
           break;
         case 'ArrowLeft':
-          if (!annotationState.isAnnotationMode) handlePrev();
+          handlePrev();
           break;
         case 'Escape':
           if (annotationState.isAnnotationMode) {
-            annotationState.toggleAnnotationMode();
+            handleCloseAnnotationMode();
           } else if (showThumbnailGrid) {
             setShowThumbnailGrid(false);
           } else if (isFullscreen) {
@@ -326,8 +367,8 @@ export default function FlipbookReader() {
 
       <main
         className={cn("flex-1 flex items-center justify-center relative overflow-hidden", !isMaximized && "p-4")}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        onTouchStart={!annotationState.isAnnotationMode ? handleTouchStart : undefined}
+        onTouchEnd={!annotationState.isAnnotationMode ? handleTouchEnd : undefined}
       >
         {!flipbookPages && (
           <div className="hidden">
@@ -341,6 +382,7 @@ export default function FlipbookReader() {
           </div>
         )}
 
+        {/* Static navigation arrows -- always visible */}
         <div
           onClick={handlePrev}
           className={cn(
@@ -348,7 +390,10 @@ export default function FlipbookReader() {
             currentPage <= 1 && "pointer-events-none opacity-0"
           )}
         >
-          <div className="w-14 h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 hover:border-white/20 shadow-xl">
+          <div className={cn(
+            "w-14 h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-black/60 hover:border-white/20 shadow-xl",
+            annotationState.isAnnotationMode ? "opacity-80" : "opacity-0 group-hover:opacity-100"
+          )}>
             <ChevronLeft className="w-8 h-8" />
           </div>
         </div>
@@ -360,7 +405,10 @@ export default function FlipbookReader() {
             currentPage >= totalPages && "pointer-events-none opacity-0"
           )}
         >
-          <div className="w-14 h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all duration-300 hover:scale-110 hover:bg-black/60 hover:border-white/20 shadow-xl">
+          <div className={cn(
+            "w-14 h-14 rounded-full bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white transition-all duration-300 hover:scale-110 hover:bg-black/60 hover:border-white/20 shadow-xl",
+            annotationState.isAnnotationMode ? "opacity-80" : "opacity-0 group-hover:opacity-100"
+          )}>
             <ChevronRight className="w-8 h-8" />
           </div>
         </div>
@@ -369,106 +417,157 @@ export default function FlipbookReader() {
           className="relative transition-transform duration-300 z-10"
           style={{ transform: `scale(${zoom})` }}
         >
-          {viewMode === 'double' && (
-            <div className="absolute left-1/2 top-4 bottom-4 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-black/15 to-transparent z-[5] pointer-events-none blur-[4px]" />
-          )}
-
-          {flipbookPages && flipbookPages.length > 0 ? (
-            <HTMLFlipBook
-              ref={flipBookRef}
-              width={flipbookDimensions.width}
-              height={flipbookDimensions.height}
-              size="stretch"
-              minWidth={300}
-              maxWidth={600}
-              minHeight={424}
-              maxHeight={848}
-              showCover={true}
-              mobileScrollSupport={true}
-              onFlip={onFlip}
-              className="shadow-2xl"
-              style={{}}
-              startPage={0}
-              drawShadow={true}
-              flippingTime={800}
-              usePortrait={viewMode === 'single'}
-              startZIndex={0}
-              autoSize={true}
-              maxShadowOpacity={0.6}
-              showPageCorners={true}
-              disableFlipByClick={false}
-              swipeDistance={30}
-              clickEventForward={true}
-              useMouseEvents={true}
+          {/* ===== ANNOTATION MODE: Static single-page view (no flip animation) ===== */}
+          {annotationState.isAnnotationMode ? (
+            <div
+              className="relative shadow-2xl"
+              style={{ width: flipbookDimensions.width, height: flipbookDimensions.height }}
             >
-              {flipbookPages.map((page) => (
-                <FlipPage key={page.id} pageNumber={page.page_number} annotationOverlay={renderAnnotationOverlay(page.page_number)}>
-                  <img
-                    src={page.svg_url || page.image_url}
-                    alt={`Page ${page.page_number}`}
-                    className="w-full h-full object-contain pointer-events-none"
-                    loading={page.page_number <= 4 ? "eager" : "lazy"}
-                  />
-                </FlipPage>
-              ))}
-            </HTMLFlipBook>
-          ) : totalPages > 0 ? (
-            <Document
-              file={(pdfUrl as any) || undefined}
-              options={pdfOptions}
-              className="flex justify-center items-center"
-              onLoadSuccess={onDocumentLoadSuccess}
-              loading={
+              {flipbookPages && flipbookPages.length > 0 ? (
+                (() => {
+                  const page = flipbookPages.find((p) => p.page_number === currentPage) || flipbookPages[0];
+                  return (
+                    <FlipPage pageNumber={page.page_number} annotationOverlay={renderAnnotationOverlay(page.page_number)}>
+                      <img
+                        src={page.svg_url || page.image_url}
+                        alt={`Page ${page.page_number}`}
+                        className="w-full h-full object-contain pointer-events-none"
+                      />
+                    </FlipPage>
+                  );
+                })()
+              ) : totalPages > 0 ? (
+                <Document
+                  file={(pdfUrl as any) || undefined}
+                  options={pdfOptions}
+                  onLoadSuccess={onDocumentLoadSuccess}
+                >
+                  <FlipPage pageNumber={currentPage} annotationOverlay={renderAnnotationOverlay(currentPage)}>
+                    <Page
+                      pageNumber={currentPage}
+                      width={flipbookDimensions.width}
+                      renderTextLayer={false}
+                      renderAnnotationLayer={false}
+                    />
+                  </FlipPage>
+                </Document>
+              ) : (
+                <div className="flex items-center justify-center w-full h-full text-white gap-2">
+                  <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                  <span className="font-display text-lg">Loading...</span>
+                </div>
+              )}
+
+              {/* Page indicator for static mode */}
+              <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs text-white/50 font-mono whitespace-nowrap">
+                {currentPage} / {totalPages}
+              </div>
+            </div>
+          ) : (
+            /* ===== NORMAL MODE: Flipbook with page curl animation ===== */
+            <>
+              {viewMode === 'double' && (
+                <div className="absolute left-1/2 top-4 bottom-4 w-12 -translate-x-1/2 bg-gradient-to-r from-transparent via-black/15 to-transparent z-[5] pointer-events-none blur-[4px]" />
+              )}
+
+              {flipbookPages && flipbookPages.length > 0 ? (
+                <HTMLFlipBook
+                  ref={flipBookRef}
+                  width={flipbookDimensions.width}
+                  height={flipbookDimensions.height}
+                  size="stretch"
+                  minWidth={300}
+                  maxWidth={600}
+                  minHeight={424}
+                  maxHeight={848}
+                  showCover={true}
+                  mobileScrollSupport={true}
+                  onFlip={onFlip}
+                  className="shadow-2xl"
+                  style={{}}
+                  startPage={0}
+                  drawShadow={true}
+                  flippingTime={800}
+                  usePortrait={viewMode === 'single'}
+                  startZIndex={0}
+                  autoSize={true}
+                  maxShadowOpacity={0.6}
+                  showPageCorners={true}
+                  disableFlipByClick={false}
+                  swipeDistance={30}
+                  clickEventForward={true}
+                  useMouseEvents={true}
+                >
+                  {flipbookPages.map((page) => (
+                    <FlipPage key={page.id} pageNumber={page.page_number} annotationOverlay={renderAnnotationOverlay(page.page_number)}>
+                      <img
+                        src={page.svg_url || page.image_url}
+                        alt={`Page ${page.page_number}`}
+                        className="w-full h-full object-contain pointer-events-none"
+                        loading={page.page_number <= 4 ? "eager" : "lazy"}
+                      />
+                    </FlipPage>
+                  ))}
+                </HTMLFlipBook>
+              ) : totalPages > 0 ? (
+                <Document
+                  file={(pdfUrl as any) || undefined}
+                  options={pdfOptions}
+                  className="flex justify-center items-center"
+                  onLoadSuccess={onDocumentLoadSuccess}
+                  loading={
+                    <div className="flex items-center text-white gap-2">
+                      <Loader2 className="animate-spin w-8 h-8 text-primary" />
+                      <span className="font-display text-lg">Loading Book...</span>
+                    </div>
+                  }
+                >
+                  <HTMLFlipBook
+                    ref={flipBookRef}
+                    width={flipbookDimensions.width}
+                    height={flipbookDimensions.height}
+                    size="stretch"
+                    minWidth={300}
+                    maxWidth={600}
+                    minHeight={424}
+                    maxHeight={848}
+                    showCover={true}
+                    mobileScrollSupport={true}
+                    onFlip={onFlip}
+                    className="shadow-2xl"
+                    style={{}}
+                    startPage={0}
+                    drawShadow={true}
+                    flippingTime={800}
+                    usePortrait={viewMode === 'single'}
+                    startZIndex={0}
+                    autoSize={true}
+                    maxShadowOpacity={0.6}
+                    showPageCorners={true}
+                    disableFlipByClick={false}
+                    swipeDistance={30}
+                    clickEventForward={true}
+                    useMouseEvents={true}
+                  >
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                      <FlipPage key={`pdf-page-${pageNum}`} pageNumber={pageNum} annotationOverlay={renderAnnotationOverlay(pageNum)}>
+                        <Page
+                          pageNumber={pageNum}
+                          width={flipbookDimensions.width}
+                          renderTextLayer={true}
+                          renderAnnotationLayer={false}
+                        />
+                      </FlipPage>
+                    ))}
+                  </HTMLFlipBook>
+                </Document>
+              ) : (
                 <div className="flex items-center text-white gap-2">
                   <Loader2 className="animate-spin w-8 h-8 text-primary" />
                   <span className="font-display text-lg">Loading Book...</span>
                 </div>
-              }
-            >
-              <HTMLFlipBook
-                ref={flipBookRef}
-                width={flipbookDimensions.width}
-                height={flipbookDimensions.height}
-                size="stretch"
-                minWidth={300}
-                maxWidth={600}
-                minHeight={424}
-                maxHeight={848}
-                showCover={true}
-                mobileScrollSupport={true}
-                onFlip={onFlip}
-                className="shadow-2xl"
-                style={{}}
-                startPage={0}
-                drawShadow={true}
-                flippingTime={800}
-                usePortrait={viewMode === 'single'}
-                startZIndex={0}
-                autoSize={true}
-                maxShadowOpacity={0.6}
-                showPageCorners={true}
-                disableFlipByClick={false}
-                swipeDistance={30}
-                clickEventForward={true}
-                useMouseEvents={true}
-              >
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <FlipPage key={`pdf-page-${pageNum}`} pageNumber={pageNum} annotationOverlay={renderAnnotationOverlay(pageNum)}>
-                    <Page
-                      pageNumber={pageNum}
-                      width={flipbookDimensions.width}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={false}
-                    />
-                  </FlipPage>
-                ))}
-              </HTMLFlipBook>
-            </Document>
-          ) : (
-            <div className="flex items-center text-white gap-2">
-              <Loader2 className="animate-spin w-8 h-8 text-primary" />
-              <span className="font-display text-lg">Loading Book...</span>
-            </div>
+              )}
+            </>
           )}
         </div>
       </main>
@@ -511,6 +610,7 @@ export default function FlipbookReader() {
         onFontSizeChange={annotationState.setFontSize}
         isAnnotationMode={annotationState.isAnnotationMode}
         onToggleAnnotationMode={annotationState.toggleAnnotationMode}
+        onCloseAnnotationMode={handleCloseAnnotationMode}
         onClearPage={() => annotationState.clearPageAnnotations(currentPage)}
         onClearAll={annotationState.clearAllAnnotations}
         onEmojiSelect={setSelectedEmoji}
@@ -518,6 +618,38 @@ export default function FlipbookReader() {
         selectedEmoji={selectedEmoji}
         selectedSticker={selectedSticker}
       />
+
+      {/* Close Annotation Confirmation Dialog */}
+      <AlertDialog open={showCloseDialog} onOpenChange={setShowCloseDialog}>
+        <AlertDialogContent className="bg-slate-900 border-white/15 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Annotation Tools?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/60">
+              You have annotations on your pages. What would you like to do?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            <AlertDialogCancel
+              onClick={() => setShowCloseDialog(false)}
+              className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={keepAndClose}
+              className="bg-primary hover:bg-primary/80"
+            >
+              Keep & Close
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={confirmCloseAnnotations}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Discard All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

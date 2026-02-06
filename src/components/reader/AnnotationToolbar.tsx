@@ -35,6 +35,7 @@ interface AnnotationToolbarProps {
   onFontSizeChange: (size: number) => void;
   isAnnotationMode: boolean;
   onToggleAnnotationMode: () => void;
+  onCloseAnnotationMode: () => void;
   onClearPage: () => void;
   onClearAll: () => void;
   onEmojiSelect: (emoji: string) => void;
@@ -65,6 +66,7 @@ export function AnnotationToolbar({
   onFontSizeChange,
   isAnnotationMode,
   onToggleAnnotationMode,
+  onCloseAnnotationMode,
   onClearPage,
   onClearAll,
   onEmojiSelect,
@@ -386,8 +388,8 @@ export function AnnotationToolbar({
 
             {/* Close Annotation Mode */}
             <button
-              onClick={onToggleAnnotationMode}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-all"
+              onClick={onCloseAnnotationMode}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/40 hover:text-white hover:bg-red-500/20 hover:text-red-400 transition-all"
               title="Close Annotation Tools"
               aria-label="Close Annotation Tools"
             >
