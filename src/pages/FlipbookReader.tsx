@@ -25,6 +25,9 @@ import { AmbientBackground } from '@/components/reader/AmbientBackground';
 import { ReaderHeader } from '@/components/reader/ReaderHeader';
 import { ReaderControls } from '@/components/reader/ReaderControls';
 import { ThumbnailGrid } from '@/components/reader/ThumbnailGrid';
+import { AnnotationToolbar } from '@/components/reader/AnnotationToolbar';
+import { AnnotationCanvas } from '@/components/reader/AnnotationCanvas';
+import { useAnnotations } from '@/hooks/useAnnotations';
 
 const pdfOptions = {
   cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
@@ -38,9 +41,10 @@ const pdfOptions = {
 interface FlipPageProps {
   children: React.ReactNode;
   pageNumber: number;
+  annotationOverlay?: React.ReactNode;
 }
 
-const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(({ children, pageNumber }, ref) => {
+const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(({ children, pageNumber, annotationOverlay }, ref) => {
   return (
     <div ref={ref} className="relative bg-white w-full h-full flex items-center justify-center overflow-hidden shadow-[0_0_20px_rgba(0,0,0,0.2)]">
       <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-gradient-to-l from-black/10 to-transparent z-10" />
@@ -49,7 +53,8 @@ const FlipPage = forwardRef<HTMLDivElement, FlipPageProps>(({ children, pageNumb
       <div className="absolute left-[4px] top-0 bottom-0 w-[1px] bg-black/5 z-10" />
 
       {children}
-      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono select-none">
+      {annotationOverlay}
+      <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-slate-400 font-mono select-none z-30">
         {pageNumber}
       </div>
     </div>
@@ -84,6 +89,11 @@ export default function FlipbookReader() {
   const flipBookRef = useRef<any>(null);
   const [showThumbnailGrid, setShowThumbnailGrid] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
+
+  // Annotation system
+  const annotationState = useAnnotations();
+  const [selectedEmoji, setSelectedEmoji] = useState('');
+  const [selectedSticker, setSelectedSticker] = useState('');
 
   useEffect(() => {
     const calculateDimensions = () => {
@@ -161,13 +171,15 @@ export default function FlipbookReader() {
       switch (e.key) {
         case 'ArrowRight':
         case ' ':
-          handleNext();
+          if (!annotationState.isAnnotationMode) handleNext();
           break;
         case 'ArrowLeft':
-          handlePrev();
+          if (!annotationState.isAnnotationMode) handlePrev();
           break;
         case 'Escape':
-          if (showThumbnailGrid) {
+          if (annotationState.isAnnotationMode) {
+            annotationState.toggleAnnotationMode();
+          } else if (showThumbnailGrid) {
             setShowThumbnailGrid(false);
           } else if (isFullscreen) {
             document.exitFullscreen();
@@ -259,6 +271,32 @@ export default function FlipbookReader() {
       </div>
     );
   }
+
+  // Helper to render annotation canvas overlay for a page
+  const renderAnnotationOverlay = (pageNum: number) => (
+    <AnnotationCanvas
+      pageNumber={pageNum}
+      annotations={annotationState.getPageAnnotations(pageNum)}
+      activeTool={annotationState.activeTool}
+      activeColor={annotationState.activeColor}
+      strokeWidth={annotationState.strokeWidth}
+      fontSize={annotationState.fontSize}
+      isAnnotationMode={annotationState.isAnnotationMode}
+      selectedEmoji={selectedEmoji}
+      selectedSticker={selectedSticker}
+      selectedAnnotationId={annotationState.selectedAnnotationId}
+      onSelectAnnotation={annotationState.setSelectedAnnotationId}
+      onCreateDrawing={annotationState.createDrawing}
+      onCreateText={annotationState.createTextAnnotation}
+      onCreateNote={annotationState.createNote}
+      onCreateEmoji={annotationState.createEmoji}
+      onCreateSticker={annotationState.createSticker}
+      onUpdateAnnotation={annotationState.updateAnnotation}
+      onRemoveAnnotation={annotationState.removeAnnotation}
+      width={flipbookDimensions.width}
+      height={flipbookDimensions.height}
+    />
+  );
 
   const flipbookPages = pages && pages.length > 0
     ? [...pages].sort((a, b) => a.page_number - b.page_number)
@@ -364,7 +402,7 @@ export default function FlipbookReader() {
               useMouseEvents={true}
             >
               {flipbookPages.map((page) => (
-                <FlipPage key={page.id} pageNumber={page.page_number}>
+                <FlipPage key={page.id} pageNumber={page.page_number} annotationOverlay={renderAnnotationOverlay(page.page_number)}>
                   <img
                     src={page.svg_url || page.image_url}
                     alt={`Page ${page.page_number}`}
@@ -415,7 +453,7 @@ export default function FlipbookReader() {
                 useMouseEvents={true}
               >
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                  <FlipPage key={`pdf-page-${pageNum}`} pageNumber={pageNum}>
+                  <FlipPage key={`pdf-page-${pageNum}`} pageNumber={pageNum} annotationOverlay={renderAnnotationOverlay(pageNum)}>
                     <Page
                       pageNumber={pageNum}
                       width={flipbookDimensions.width}
@@ -459,6 +497,26 @@ export default function FlipbookReader() {
         }}
         pdfUrl={pdfUrl}
         isVisible={!isMaximized}
+      />
+
+      {/* Annotation Toolbar */}
+      <AnnotationToolbar
+        activeTool={annotationState.activeTool}
+        onToolChange={annotationState.setActiveTool}
+        activeColor={annotationState.activeColor}
+        onColorChange={annotationState.setActiveColor}
+        strokeWidth={annotationState.strokeWidth}
+        onStrokeWidthChange={annotationState.setStrokeWidth}
+        fontSize={annotationState.fontSize}
+        onFontSizeChange={annotationState.setFontSize}
+        isAnnotationMode={annotationState.isAnnotationMode}
+        onToggleAnnotationMode={annotationState.toggleAnnotationMode}
+        onClearPage={() => annotationState.clearPageAnnotations(currentPage)}
+        onClearAll={annotationState.clearAllAnnotations}
+        onEmojiSelect={setSelectedEmoji}
+        onStickerSelect={setSelectedSticker}
+        selectedEmoji={selectedEmoji}
+        selectedSticker={selectedSticker}
       />
     </div>
   );
