@@ -34,36 +34,21 @@ function aliasResolverPlugin(): Plugin {
     enforce: "pre",
     configResolved(config) {
       srcDir = path.resolve(config.root, "src");
-      console.log("[v0] aliasResolverPlugin configResolved - root:", config.root, "srcDir:", srcDir);
     },
     resolveId(source) {
       if (source.startsWith("@/")) {
         const basePath = path.resolve(srcDir, source.slice(2));
         const resolved = tryResolve(basePath);
-        if (resolved) {
-          console.log("[v0] resolveId:", source, "->", resolved);
-          return resolved;
-        }
-        console.log("[v0] resolveId FAILED for:", source, "tried:", basePath);
+        if (resolved) return resolved;
       }
       return null;
     },
   };
 }
 
-console.log("[v0] vite.config.ts loaded from:", import.meta.url);
-console.log("[v0] process.cwd():", process.cwd());
-
 // https://vitejs.dev/config/
 // Export as a plain object so v0 environment can spread it correctly
 export default {
-  server: {
-    host: "::",
-    port: 8080,
-    hmr: {
-      overlay: false,
-    },
-  },
   plugins: [
     react(),
     aliasResolverPlugin(),
