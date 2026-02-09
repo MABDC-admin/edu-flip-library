@@ -22,7 +22,7 @@ const signupSchema = loginSchema.extend({
 });
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const isLogin = true;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
@@ -242,22 +242,7 @@ export default function Auth() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setErrors({});
-              }}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              {isLogin ? (
-                <>Don't have an account? <span className="font-semibold text-primary">Sign up</span></>
-              ) : (
-                <>Already have an account? <span className="font-semibold text-primary">Log in</span></>
-              )}
-            </button>
-          </div>
+          {/* Signup disabled */}
         </CardContent>
       </Card>
     </div>
