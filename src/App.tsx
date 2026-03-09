@@ -54,6 +54,7 @@ const App = () => (
             <Route path="/admin/schools" element={<AdminSchools />} />
             <Route path="/admin/academic-years" element={<AdminAcademicYears />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/api-docs" element={<AdminApiDocs />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             {/* Public Routes */}
