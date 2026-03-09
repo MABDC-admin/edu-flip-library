@@ -19,6 +19,47 @@ export default function AdminSettings() {
         new: '',
         confirm: ''
     });
+    const [isExporting, setIsExporting] = useState(false);
+
+    const handleExportStorage = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        toast({ title: 'Preparing export...', description: 'This may take a while for large files.' });
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error('Not authenticated');
+            const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+            const response = await fetch(
+                `https://${projectId}.supabase.co/functions/v1/export-storage`,
+                {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${session.access_token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ buckets: ['pdf-uploads', 'book-pages', 'book-covers'] }),
+                }
+            );
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({ error: 'Export failed' }));
+                throw new Error(err.error || 'Export failed');
+            }
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `storage-export-${new Date().toISOString().split('T')[0]}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            toast({ title: 'Export complete', description: 'ZIP file downloaded successfully.' });
+        } catch (error: any) {
+            toast({ title: 'Export failed', description: error.message, variant: 'destructive' });
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const updatePasswordMutation = useMutation({
         mutationFn: async (password: string) => {
