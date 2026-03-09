@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.export-storage]
 verify_jwt = false
+
+[functions.api]
+verify_jwt = false

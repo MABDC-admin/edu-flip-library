@@ -21,6 +21,7 @@ import AdminGrades from "./pages/admin/Grades";
 import AdminSchools from "./pages/admin/Schools";
 import AdminAcademicYears from "./pages/admin/AcademicYears";
 import AdminSettings from "./pages/admin/Settings";
+import AdminApiDocs from "./pages/admin/ApiDocs";
 import AttendanceScanner from "./pages/AttendanceScanner";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import NotFound from "./pages/NotFound";
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/admin/schools" element={<AdminSchools />} />
             <Route path="/admin/academic-years" element={<AdminAcademicYears />} />
             <Route path="/admin/settings" element={<AdminSettings />} />
+            <Route path="/admin/api-docs" element={<AdminApiDocs />} />
             <Route path="/teacher" element={<TeacherDashboard />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             {/* Public Routes */}

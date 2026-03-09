@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Building2, Calendar, Shield, ChevronRight, Lock, Download } from 'lucide-react';
+import { Building2, Calendar, Shield, ChevronRight, Lock, Download, Key } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -118,6 +118,14 @@ export default function AdminSettings() {
             action: () => handleExportStorage(),
             color: 'text-indigo-500',
             bgColor: 'bg-indigo-50'
+        },
+        {
+            title: 'API Access',
+            description: 'View API endpoints and usage for external integrations.',
+            icon: Key,
+            href: '/admin/api-docs',
+            color: 'text-rose-500',
+            bgColor: 'bg-rose-50'
         }
     ];
 
