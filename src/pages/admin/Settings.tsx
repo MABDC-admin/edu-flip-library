@@ -118,8 +118,15 @@ export default function AdminSettings() {
             action: () => handleExportStorage(),
             color: 'text-indigo-500',
             bgColor: 'bg-indigo-50'
+        },
+        {
+            title: 'API Access',
+            description: 'View API endpoints and usage for external integrations.',
+            icon: Key,
+            href: '/admin/api-docs',
+            color: 'text-rose-500',
+            bgColor: 'bg-rose-50'
         }
-    ];
 
     return (
         <AdminLayout title="Settings">
