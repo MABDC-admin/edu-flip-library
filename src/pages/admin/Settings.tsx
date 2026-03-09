@@ -69,6 +69,14 @@ export default function AdminSettings() {
             action: () => setIsPasswordDialogOpen(true),
             color: 'text-orange-500',
             bgColor: 'bg-orange-50'
+        },
+        {
+            title: 'Export Storage',
+            description: 'Download all files from storage buckets as a ZIP archive.',
+            icon: Download,
+            action: () => handleExportStorage(),
+            color: 'text-indigo-500',
+            bgColor: 'bg-indigo-50'
         }
     ];
 
