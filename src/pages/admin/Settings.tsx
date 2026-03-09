@@ -127,6 +127,7 @@ export default function AdminSettings() {
             color: 'text-rose-500',
             bgColor: 'bg-rose-50'
         }
+    ];
 
     return (
         <AdminLayout title="Settings">
