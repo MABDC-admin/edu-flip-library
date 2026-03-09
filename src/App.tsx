@@ -21,6 +21,7 @@ import AdminGrades from "./pages/admin/Grades";
 import AdminSchools from "./pages/admin/Schools";
 import AdminAcademicYears from "./pages/admin/AcademicYears";
 import AdminSettings from "./pages/admin/Settings";
+import AdminApiDocs from "./pages/admin/ApiDocs";
 import AttendanceScanner from "./pages/AttendanceScanner";
 import TeacherDashboard from "./pages/teacher/Dashboard";
 import NotFound from "./pages/NotFound";
